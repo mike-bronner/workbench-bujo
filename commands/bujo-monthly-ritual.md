@@ -1,20 +1,30 @@
 ---
-description: Run the monthly BuJo ritual right now — roll up the month's weeklies, create monthly note, reflect and adjust goals. Interactive.
+description: Run the monthly BuJo ritual ad-hoc — orchestrator plans first, then the universal protocol runs for the monthly tier only.
 ---
 
-The user has invoked `/workbench:bujo-monthly-ritual`. Execute the monthly BuJo ritual on-demand.
+The user invoked `/workbench-bujo:bujo-monthly-ritual`. Run the monthly tier of the BuJo ritual on-demand.
 
-## Setup
+## Phase 1 — Plan (orchestrator)
 
-1. Read the BuJo config at `~/.claude/plugins/data/bullet-journal-claude-workbench/config.json`.
-   - If it doesn't exist, tell the user to run `/workbench:bujo-setup` first.
-2. Read the skill definition at `${CLAUDE_PLUGIN_ROOT}/skills/rituals/monthly-bujo-ritual.md`.
+Dispatch the `bujo-orchestrator` sub-agent with:
 
-## Execution
+```
+today: <YYYY-MM-DD computed in the configured timezone>
+timezone: <tz from ~/.claude/plugins/data/workbench-bujo-claude-workbench/config.json, default America/Phoenix>
+```
 
-Follow the skill definition step by step. Use the config values for:
-- **Timezone** → from `config.timezone`
-- **Journal folder** → from `config.journal_folder`
-- **Note names** → `journal_index_note`, `future_log_note`, `goals_note` from config
+Parse the orchestrator's final YAML block. **Ad-hoc override:** ignore the orchestrator's `rituals` list and force the execution tier to `monthly`. Keep everything else — `retrospect.monthly`, `reflection_focus.monthly`, `warnings`, `state_inspected`.
 
-This is an interactive ritual — all interactive steps (Steps 5, 6) are mandatory. Do not skip them.
+## Phase 2 — Surface anomalies
+
+If `warnings` is non-empty, present them to Mike and wait for his decision before proceeding.
+
+## Phase 3 — Execute the monthly ritual
+
+Read `${CLAUDE_PLUGIN_ROOT}/skills/rituals/bujo-ritual.md` — the universal protocol — and follow it with `tier = monthly`. The orchestrator's `retrospect.monthly` and `reflection_focus.monthly` are your inputs.
+
+## Hard rules
+
+- Use only the MCP `mcp__plugin_workbench-bujo_scribe__*` tools for I/O.
+- Do not fabricate responses if Mike doesn't answer; pause the session.
+- Do not run other tiers — this command is monthly-only.
