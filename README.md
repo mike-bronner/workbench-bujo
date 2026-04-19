@@ -272,6 +272,10 @@ The plugin defines the *process* (when to run, what steps to follow). BuJo *rule
 - [`docs/rules-decisions.md`](docs/rules-decisions.md) — 7-gap audit + resulting rules
 - [`docs/open-issues.md`](docs/open-issues.md) — deferred implementation items (Calendar/Reminders backend, etc.)
 
+## Versioning
+
+**The plugin and its scribe MCP use lockstep versioning.** `workbench-bujo@X.Y.Z` always expects `bujo-scribe-mcp@X.Y.Z` — never mix versions. When one bumps, the other bumps to match, even if the change was one-sided. This avoids the compatibility-matrix confusion of two independent version numbers for a bundled system.
+
 ## Updating
 
 **Once published** — from the marketplace:
