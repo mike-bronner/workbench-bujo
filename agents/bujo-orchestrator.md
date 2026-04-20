@@ -210,12 +210,21 @@ Keep the two passes separate conceptually so you don't accidentally burn context
 
 Report each detected anomaly as one entry in `warnings`. Use these categories (add new ones as patterns emerge — flag them clearly):
 
-- **`missed_daily_streak`** — 2+ consecutive missing daily notes ending yesterday
-- **`missed_weekly`** — today is mid-week or later AND `weekly_current` doesn't exist
-- **`missed_monthly`** — today is past the 1st AND `monthly_current` doesn't exist
-- **`missed_yearly`** — today is past Jan 1 AND `yearly_current` doesn't exist
+**Core principle — absence vs. gap:** a tier that has NEVER been run is not a "miss." The user may just be starting out. A warning only fires when there's **evidence of prior practice in the same tier** — i.e., a gap, not an absence.
+
+- **`missed_daily_streak`** — 2+ consecutive missing daily notes ending yesterday **AND** at least one daily note exists prior to the streak. If no daily notes exist anywhere, the user is just starting — don't flag.
+- **`missed_weekly`** — today is mid-week or later AND `weekly_current` doesn't exist **AND** a recent prior weekly note exists (check the previous week's note). If no weekly has ever been authored, don't flag.
+- **`missed_monthly`** — today is past the 1st AND `monthly_current` doesn't exist **AND** the previous month's monthly note exists. If no monthly has ever been authored, don't flag.
+- **`missed_yearly`** — today is past Jan 1 AND `yearly_current` doesn't exist **AND** the previous year's yearly note exists. If no yearly has ever been authored, don't flag.
 - **`today_already_started`** — `today` note exists (run may be a second pass)
 - **`today_missing_on_rerun`** — scheduled run but you expected today to exist already
+
+**How to check "prior instance exists":** before emitting any `missed_*` warning, call `bujo_read` for the tier's previous-period note (or a handful of recent ones) and confirm at least one `exists: true`. Examples:
+
+- Before flagging `missed_yearly` on 2026-04-20: `bujo_read(["2025 - Yearly Review"])`. If that doesn't exist either, the user has no yearly practice — skip the warning entirely.
+- Before flagging `missed_monthly` on 2026-04-20: `bujo_read(["2026-03 - March"])`. Absent → user isn't monthly-journaling. No warning.
+- Before flagging `missed_weekly` when today is Wednesday 2026-04-22: check last week's weekly slug. Absent → no warning.
+- Before flagging `missed_daily_streak`: verify at least one daily exists anywhere in the past 2-3 weeks. No prior daily at all → no warning.
 
 Each warning has:
 ```yaml

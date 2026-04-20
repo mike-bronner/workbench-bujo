@@ -15,6 +15,56 @@ You were invoked by `/bujo` (the orchestrator already produced a plan) or by a t
 
 This ritual is **not an automated summary.** Every step that asks Mike a question REQUIRES waiting for a real answer. Do not fabricate responses. If Mike doesn't respond, leave the session paused — a half-finished ritual is better than a fake-completed one.
 
+### How to ask — `AskUserQuestion` everywhere, varied patterns
+
+**Every interactive prompt uses `AskUserQuestion`.** This keeps sessions clearly "awaiting input" (the UI signal stays active until Mike responds) rather than appearing complete while he's actually the bottleneck. The pattern varies by question type:
+
+**1. Decision questions (pick-from-set)** — content-rich prefab options Mike can click directly:
+
+```
+Question: "What do you want to do with this item?"
+Options:
+  - "Carry forward"     (description: "Migrate to today")
+  - "Drop"              (description: "Mark dropped — let it go")
+  - "Schedule later"    (description: "Push to a future date")
+  - "Mark complete"     (description: "Already done")
+  (+ Other auto-added — user can type a custom response)
+```
+
+Use `preview` fields on options for disposition to show item context (original text, days open, migration count) when focused. Saves dumping that into the chat.
+
+**2. Open reflection questions** — still use `AskUserQuestion`, but with **escape-hatch prefabs** that don't anchor content. The real reflection flows through the auto-appended "Other" text field.
+
+```
+Question: "How did yesterday go?"
+Options:
+  - "Pass — no reflection today"   (description: "Skip this check-in")
+  - "Come back to this"            (description: "Not ready yet — revisit at the end")
+  (+ Other auto-added — type your reflection here)
+```
+
+The prefabs are literal opt-outs, not content frames. Mike sees two explicit escape hatches, then an Other text input where he types real reflection. He's never anchored into a prefab answer he might click out of laziness.
+
+**3. Batch questions** — up to 4 per `AskUserQuestion` call when several decisions arrive together (e.g., multiple orchestrator warnings each with their own options). Don't chain sequential prompts — send them as one batch.
+
+**4. Never loose the iterative dig.** `AskUserQuestion` covers the FIRST turn of a reflection. When Mike responds with real content, **continue the conversation in plain text** — follow-up probes, feelings-digging, pattern-noticing. Those aren't new top-level questions; they're a continuing exchange. A chained `AskUserQuestion` for every follow-up would turn reflection into a form. Once a reflection is underway, stay in conversation mode until Mike signals he's ready to move on.
+
+### Never regurgitate structured data to Mike
+
+The orchestrator's plan (YAML with `kind`, `options`, `reflection_focus`, etc.) is for Hobbes to parse, not for Mike to read. Always translate into natural conversational language. Never show field names, raw option strings (`catch_up`, `skip_to_today`, etc.), or JSON/YAML syntax in what you say to Mike.
+
+### Mark chapters at phase boundaries
+
+At the start of each major step, call `mcp__ccd_session__mark_chapter` with a short noun-phrase title:
+
+- Step 2: `"Check-in"`
+- Step 3: `"Review"` (or `"Disposition"` for weekly light-mode)
+- Step 4: `"Scaffold [tier]"` (e.g., `"Scaffold today"`, `"Scaffold month"`)
+- Step 5: `"Priorities"` (or `"Intentions"` for weekly/monthly/yearly)
+- Step 6: `"Close"`
+
+This adds visible dividers and a floating table of contents, so Mike can navigate back through a long ritual. Doesn't replace interaction — it's layout only.
+
 ## Inputs from the plan
 
 Locate the block for your tier in the orchestrator's plan:
@@ -71,6 +121,8 @@ Skim the returned content. Keep it available as you run the rest of the ritual.
 
 ## Step 2 — Check-in + capture missing (INTERACTIVE — full tiers only)
 
+**Chapter mark at start:** `mcp__ccd_session__mark_chapter(title="Check-in")` — skip for weekly (no check-in).
+
 **⚠️ Skip this step entirely for the weekly (light) tier.** Go straight to Step 3.
 
 **For daily, monthly, yearly:** this is a single combined step. It replaces both Ryder's PM "how did it go" and his AM "what's missing" — running them together in the morning.
@@ -93,6 +145,8 @@ If Mike's check-in reflection surfaces items that the orchestrator's `reflection
 
 ## Step 3 — Item-by-item review
 
+**Chapter mark at start:** `mcp__ccd_session__mark_chapter(title="Review")` (full tiers) or `mcp__ccd_session__mark_chapter(title="Disposition")` (weekly light mode).
+
 **Every unfinished or dropped item gets inspected.** No batching, no fast path. This is Ryder's "friction is the feature" principle — the act of reconsidering each item *is* the practice.
 
 **Mode differs by tier:**
@@ -113,11 +167,13 @@ Compose a single ordered list:
 
 ### For each item in the list
 
-1. **Present the item** with its context. If the orchestrator provided a `suggested_openers[].opener` for this item, use it as your opener — the orchestrator has already noticed what makes this one salient. Otherwise use a tier-appropriate fallback:
+1. **Present the item** with its context in plain language. If the orchestrator provided a `suggested_openers[].opener` for this item, use it as your opener — the orchestrator has already noticed what makes this one salient. Otherwise use a tier-appropriate fallback:
    - Open task: "[bullet] — what's the story on this one?"
    - Dropped task: "[bullet] — you dropped this. What drove the drop?"
    - Migrated 3+ times: "[bullet] — you've migrated this [N] times. What's actually happening around it?"
    - Potential gap: "[observation] — anything to say about this?"
+
+   These are open questions (text input, not buttons) — they invite reflection, not a pick-from-list.
 
 2. **Listen to Mike's response.** Evaluate: does his response carry *feeling content*? (Any emotion, including numbness or deliberate neutrality.)
 
@@ -128,12 +184,13 @@ Compose a single ordered list:
 
 4. **No feelings → accept and move on.** "Sometimes things are just what they are. Ready for the next?"
 
-5. **Capture the disposition** that emerges. Every item leaves this step with one of:
-   - **carry** → migrate to current-tier target
-   - **drop** → mark as dropped (or confirm the existing drop)
-   - **schedule** → schedule forward (date required, must be future)
-   - **complete** → mark completed
-   - **leave as-is** (open but untouched) — valid for items that are deliberately still in-flight
+5. **Capture the disposition** that emerges. If the reflection already implied a disposition, confirm it conversationally (via a yes/no `AskUserQuestion`). If it's still open, use `AskUserQuestion` with the four decisions below. **Set a `preview` field** on each option showing the item's full context — original text, days open, migration count — so Mike sees the full picture on hover without it cluttering the chat.
+
+   - **Carry forward** — migrate to current-tier target
+   - **Drop** — mark as dropped (or confirm the existing drop)
+   - **Schedule for later** — schedule forward (date required, must be future)
+   - **Mark complete** — already done
+   - *(Other auto-appended — e.g., "leave as-is" for deliberately in-flight items)*
 
 6. **If a potential_gap surfaces something worth capturing**, add it to the previous period's log via `bujo_apply_decisions` with an `add` op.
 
@@ -150,6 +207,8 @@ After all items are processed, dispatch captured dispositions as `bujo_apply_dec
 ---
 
 ## Step 4 — Scaffold the current-tier target
+
+**Chapter mark at start:** `mcp__ccd_session__mark_chapter(title="Scaffold <tier>")` — e.g., `"Scaffold today"`, `"Scaffold month"`.
 
 Dispatch `bujo_scaffold` with:
 - `target` from the Tier matrix (e.g., `today` for daily)
@@ -186,33 +245,61 @@ The Future Log doesn't get renamed or archived — it's a living note. The rollo
 
 ## Step 5 — Planning / intention (INTERACTIVE)
 
+**Chapter mark at start:** `mcp__ccd_session__mark_chapter(title="Priorities")` (daily) or `mcp__ccd_session__mark_chapter(title="Intentions")` (weekly/monthly/yearly).
+
 **Mode differs by tier:**
 
 **Full tiers (daily / monthly / yearly) — with energy-aware check:**
 
-Ask the tier-appropriate energy/feeling check first:
+Ask the tier-appropriate energy/feeling check first via `AskUserQuestion`. Use content-rich prefabs — these ARE legitimate answer-space anchors for a quick pick, and "Other" handles anything richer:
 
-- **daily:** "Before priorities — how are you feeling about today? Energy, dread, eagerness, foggy?"
-- **monthly:** "Before naming the month's focus — how are you landing after last month?"
-- **yearly:** "Before the year — how are you arriving into it?"
+Daily example:
+```
+Question: "How are you feeling about today?"
+Options:
+  - "Energized"   (description: "Ready to go")
+  - "Foggy"       (description: "Slow start — easing in")
+  - "Dread"       (description: "Something's pulling at me")
+  - "Fine"        (description: "Unremarkable neutral")
+  (+ Other for anything else)
+```
 
-Wait. Evaluate for feeling presence. If Mike gives only a neutral summary, probe once for texture:
+Monthly example:
+```
+Question: "How are you landing after last month?"
+Options:
+  - "Settled"
+  - "Overwhelmed"
+  - "Mixed / complicated"
+  - "Numb — need to sit with it"
+  (+ Other)
+```
+
+If Mike picks a content option and it seems shallow, probe once *in plain text* (continuing the conversation, not a new `AskUserQuestion`):
 
 > "Fine in what way? A rested-fine, a numbing-fine, a bracing-fine?"
 
-Accept what comes (including "just fine, leave it"). Then ask the tier-appropriate planning question (see Tier matrix Step-5 column).
+Accept what comes. Then ask the tier-appropriate planning question — open reflection, so use the escape-hatch `AskUserQuestion` pattern (see Tier matrix Step-5 column) with "Pass" / "Come back to this" + Other.
 
 **Light tier (weekly) — skip the energy check, go straight to planning:**
 
-Ask directly:
+Open reflection via the escape-hatch pattern:
 
-> "What's the shape of this week — what matters most?"
+```
+Question: "What's the shape of this week — what matters most?"
+Options:
+  - "Pass — no planning today"
+  - "Come back to this"
+  (+ Other — type your intent)
+```
 
-Iterate on reorders/drops/adds. Each mutation: dispatch `bujo_apply_decisions` on the current-tier target.
+Iterate on reorders/drops/adds in plain-text conversation. Each mutation: dispatch `bujo_apply_decisions` on the current-tier target.
 
 ---
 
 ## Step 6 — Close
+
+**Chapter mark at start:** `mcp__ccd_session__mark_chapter(title="Close")`.
 
 One line:
 

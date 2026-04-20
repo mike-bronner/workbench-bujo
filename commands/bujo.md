@@ -14,6 +14,16 @@ Three phases:
 2. **Surface** — if the plan contains `warnings`, present them to Mike and let him decide how to proceed. Update the plan based on his choice.
 3. **Execute** — invoke each ritual skill in the plan's order. Each ritual drives its own interactive flow + calls the scribe MCP for mutations.
 
+## Chapter marks
+
+Call `mcp__ccd_session__mark_chapter` at each major phase transition so Mike has a navigable table of contents for long rituals:
+
+- Before Step 1: `mark_chapter(title="Plan")`
+- Before Step 2 (if warnings): `mark_chapter(title="Warnings")`
+- Entering each tier's ritual (Step 3): the ritual skill handles its own chapter marks per phase
+
+Don't mark trivially — only at real transitions.
+
 ## Step 1 — compute today, dispatch orchestrator
 
 Compute today's date and timezone from the environment (America/Phoenix by default, or whatever's set in `~/.claude/plugins/data/workbench-bujo-claude-workbench/config.json`).
@@ -31,25 +41,60 @@ Wait for the agent to return. Parse the final YAML block in its response — tha
 
 **If `plan.warnings` is empty:** proceed to Step 3 silently. Don't narrate the plan — just start the first ritual.
 
-**If `plan.warnings` has entries:** present them to Mike before touching any ritual. Format:
+**If `plan.warnings` has entries:** surface them to Mike before touching any ritual. Follow these rules strictly:
 
-> Heads up before we start:
-> - [kind]: [detail]
->   - Options: [option, option, ...]
-> - [kind]: [detail]
->   - Options: [option, option, ...]
->
-> How do you want to handle these?
+### Rule A — Translate, don't regurgitate
 
-**Wait for Mike's response. Do not proceed without it.** If he doesn't respond, leave the session paused.
+The orchestrator's YAML is **machine-structured for Hobbes to parse**, not for Mike to read. Never dump `kind: ...`, `Options: [...]`, or JSON-esque syntax into the conversation. Always translate each warning into a single plain-English sentence about *what happened* and *why it matters*.
 
-Based on his response, update the plan:
+**Examples — before and after:**
+
+❌ **Do NOT say:**
+> missed_yearly: yearly_current doesn't exist — the Jan 1 yearly ritual was never run. Mid-year now, so a full retrospect isn't really possible.
+> Options: run_now, skip_year
+
+✅ **Say instead:**
+> "The 2026 yearly retro never got set up. It's mid-year now, so a proper review isn't really on the table — but I can scaffold an empty yearly note for tracking intentions, or we skip it."
+
+❌ **Do NOT say:**
+> missed_daily_streak: 3 consecutive missing daily notes.
+> Options: skip_to_today, pause
+
+✅ **Say instead:**
+> "Three daily notes are missing — Apr 15, 16, and 17. No meaningful catch-up possible there, but worth noting."
+
+Keep the translation tight. One sentence per warning is usually enough. Strip out anything that's just restating structured fields.
+
+### Rule B — Use `AskUserQuestion` for decisions, not text prompts
+
+When a warning needs a decision (options field is non-empty), use the `AskUserQuestion` tool to present options as clickable buttons. This keeps the session clearly "awaiting input" rather than appearing complete, and saves Mike from typing.
+
+Map the orchestrator's `options` values to human-readable labels:
+
+| Orchestrator option | Button label |
+|---|---|
+| `catch_up` | "Catch up on missed" |
+| `skip_to_today` | "Skip to today" |
+| `run_now` | "Run it now" |
+| `skip_year` / `skip_month` / `skip_week` | "Skip [tier]" |
+| `pause` | "Pause session" |
+
+If multiple warnings each have their own decisions, batch them into a **single** `AskUserQuestion` call with multiple questions (one per warning). Don't chain sequential prompts.
+
+If a warning is informational only (no decision needed — e.g., `today_already_started` when it's fine), mention it as prose and move on without asking.
+
+### Rule C — Honor the answer, don't guess
+
+After Mike responds:
 - `catch_up` for missed rituals → prepend the missed rituals to `plan.rituals` in chronological order, oldest first
 - `skip_to_today` → proceed with the original `plan.rituals` unchanged
 - `skip_week` / `skip_month` / `skip_year` → remove that tier from `plan.rituals`
-- `pause` → stop here, confirm with Mike, end the session without running any ritual
+- `run_now` → add that tier to `plan.rituals` in correct order
+- `pause` → stop here, confirm once with Mike, end the session without running any ritual
 
-If Mike's response is ambiguous or introduces a new preference, surface the ambiguity before acting. Don't guess.
+If the response is ambiguous or Mike suggests a new option not in the buttons, surface the ambiguity before acting. Don't guess.
+
+If Mike doesn't respond, leave the session paused. Never fabricate a choice.
 
 ## Step 3 — execute the plan
 
