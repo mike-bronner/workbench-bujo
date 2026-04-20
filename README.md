@@ -82,36 +82,25 @@ claude plugin install /absolute/path/to/workbench-bujo
 
 After installation, restart Claude Code so the plugin's agents, skills, commands, and MCP server are picked up.
 
-### 2. Install the scribe MCP
+### 2. The scribe MCP auto-installs — nothing for you to do
 
-The scribe MCP is distributed as a separate Python package so non-plugin users can pull it too.
+Starting with v0.4.0, the plugin bundles a matching version of the scribe MCP as a Python wheel at `assets/scribe/bujo_scribe_mcp-X.Y.Z-py3-none-any.whl`. The plugin's MCP launcher auto-installs it the first time an MCP launch happens, and auto-updates on version mismatch after every plugin update.
 
-**Once published to PyPI:**
+**Requirements:**
+- `uv` must be on PATH ([install uv](https://docs.astral.sh/uv/getting-started/installation/)). The launcher uses `uv tool install` under the hood.
 
-```
-uv tool install bujo-scribe-mcp
-```
+**What happens on first plugin launch:**
+1. Launcher checks `$HOME/.local/bin/bujo-scribe-mcp` and common fallback locations.
+2. If not found (or version differs from the bundled wheel), runs `uv tool install --from <bundled wheel> bujo-scribe-mcp --force`.
+3. Execs the freshly-installed binary to start the MCP server.
 
-**Currently — pre-publication:** `bujo-scribe-mcp` is not yet on PyPI. The package lives as source only on the author's machine (no public remote yet). If you're Mike (or someone Mike has given the source to), install from the local directory:
+Version tracking happens via `bujo-scribe-mcp --version` on the installed binary compared against the wheel's filename. Plugin updates ship a new wheel; next MCP launch notices the delta and reinstalls silently.
 
-```
-uv tool install --from /absolute/path/to/bujo-scribe-mcp bujo-scribe-mcp
-```
-
-Verify it's on your PATH:
+**Manual install (optional):** if you want to pre-install for testing or to bypass the launcher auto-install:
 
 ```
-which bujo-scribe-mcp
-# /Users/you/.local/bin/bujo-scribe-mcp
+uv tool install --from /path/to/workbench-bujo/assets/scribe/bujo_scribe_mcp-*.whl bujo-scribe-mcp
 ```
-
-When the package source changes, reinstall:
-
-```
-uv tool install --from /absolute/path/to/bujo-scribe-mcp bujo-scribe-mcp --force --reinstall
-```
-
-**Publication roadmap:** once `bujo-scribe-mcp` is pushed to a public GitHub repo and tagged, it will be publishable to PyPI. Until then, `uv tool install bujo-scribe-mcp` (bare name) won't work.
 
 ### 3. Run setup
 
@@ -293,13 +282,4 @@ claude plugin install /absolute/path/to/workbench-bujo  # re-installs fresh
 
 Either way, re-run `/workbench-bujo:bujo-setup` to sync the scheduled-task prompt with the updated ritual definitions.
 
-Update the scribe MCP when it changes:
-
-```
-# Once on PyPI:
-uv tool install --upgrade bujo-scribe-mcp
-
-# Pre-publication (from your local clone):
-cd /path/to/bujo-scribe-mcp && git pull
-uv tool install --from /absolute/path/to/bujo-scribe-mcp bujo-scribe-mcp --force --reinstall
-```
+The scribe MCP updates automatically when you update the plugin — the bundled wheel ships with each plugin release and the MCP launcher reinstalls on version mismatch at next MCP start. You don't need to do anything separately.
