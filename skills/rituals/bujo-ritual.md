@@ -15,39 +15,89 @@ You were invoked by `/bujo` (the orchestrator already produced a plan) or by a t
 
 This ritual is **not an automated summary.** Every step that asks Mike a question REQUIRES waiting for a real answer. Do not fabricate responses. If Mike doesn't respond, leave the session paused — a half-finished ritual is better than a fake-completed one.
 
-### How to ask — `AskUserQuestion` everywhere, varied patterns
+### How to ask — **INVOKE THE `AskUserQuestion` TOOL**, don't format text
 
-**Every interactive prompt uses `AskUserQuestion`.** This keeps sessions clearly "awaiting input" (the UI signal stays active until Mike responds) rather than appearing complete while he's actually the bottleneck. The pattern varies by question type:
+**🛑 Read this carefully — the #1 failure mode is simulating `AskUserQuestion` with prose.**
 
-**1. Decision questions (pick-from-set)** — content-rich prefab options Mike can click directly:
+Every interactive prompt is made by **calling the `AskUserQuestion` tool**. That's a tool invocation, not a formatting convention. If you write a question in chat and list options as bullets or "Pick one:" prose, **you have NOT asked the question correctly** — there will be no button UI, no "awaiting input" indicator, and the session will appear complete.
 
-```
-Question: "What do you want to do with this item?"
-Options:
-  - "Carry forward"     (description: "Migrate to today")
-  - "Drop"              (description: "Mark dropped — let it go")
-  - "Schedule later"    (description: "Push to a future date")
-  - "Mark complete"     (description: "Already done")
-  (+ Other auto-added — user can type a custom response)
-```
-
-Use `preview` fields on options for disposition to show item context (original text, days open, migration count) when focused. Saves dumping that into the chat.
-
-**2. Open reflection questions** — still use `AskUserQuestion`, but with **escape-hatch prefabs** that don't anchor content. The real reflection flows through the auto-appended "Other" text field.
+**Load the tool first.** `AskUserQuestion` is a deferred tool. Before the first interactive prompt, load its schema:
 
 ```
-Question: "How did yesterday go?"
-Options:
-  - "Pass — no reflection today"   (description: "Skip this check-in")
-  - "Come back to this"            (description: "Not ready yet — revisit at the end")
-  (+ Other auto-added — type your reflection here)
+ToolSearch(query="select:AskUserQuestion", max_results=1)
 ```
 
-The prefabs are literal opt-outs, not content frames. Mike sees two explicit escape hatches, then an Other text input where he types real reflection. He's never anchored into a prefab answer he might click out of laziness.
+Do this once per session (it stays loaded). Then for every interactive prompt, actually invoke the tool with a structured payload — not prose.
 
-**3. Batch questions** — up to 4 per `AskUserQuestion` call when several decisions arrive together (e.g., multiple orchestrator warnings each with their own options). Don't chain sequential prompts — send them as one batch.
+**What "correct" looks like in a tool call:**
 
-**4. Never loose the iterative dig.** `AskUserQuestion` covers the FIRST turn of a reflection. When Mike responds with real content, **continue the conversation in plain text** — follow-up probes, feelings-digging, pattern-noticing. Those aren't new top-level questions; they're a continuing exchange. A chained `AskUserQuestion` for every follow-up would turn reflection into a form. Once a reflection is underway, stay in conversation mode until Mike signals he's ready to move on.
+```jsonc
+AskUserQuestion({
+  questions: [{
+    question: "How did yesterday go?",
+    header: "Check-in",
+    multiSelect: false,
+    options: [
+      { label: "Pass — skip today",   description: "No reflection this morning" },
+      { label: "Come back to this",  description: "Not ready yet — revisit at the end" }
+    ]
+  }]
+})
+```
+
+**What INCORRECT looks like (do NOT do this):**
+
+> 💬 Type your reflection — or pick an option:
+> - Pass — skip today
+> - Come back to this
+
+That's prose rendering. There are no buttons. The user has to type anyway. The UI doesn't know the session is waiting. **Always invoke the tool.**
+
+---
+
+**Two prompt patterns, both delivered via tool calls:**
+
+**1. Decision questions (pick-from-set)** — content-rich prefab options. Full call:
+
+```jsonc
+AskUserQuestion({
+  questions: [{
+    question: "What do you want to do with this item?",
+    header: "Disposition",
+    multiSelect: false,
+    options: [
+      { label: "Carry forward",  description: "Migrate to today",           preview: "<item context: original text, days open, migration count>" },
+      { label: "Drop",           description: "Mark dropped — let it go",   preview: "<item context>" },
+      { label: "Schedule later", description: "Push to a future date",       preview: "<item context>" },
+      { label: "Mark complete",  description: "Already done",                preview: "<item context>" }
+    ]
+  }]
+})
+```
+
+Note the `preview` field — show item context (original text, days open, migration count) there so it doesn't clutter chat.
+
+**2. Open reflection questions** — escape-hatch prefabs + free-text via the auto-Other input. Full call:
+
+```jsonc
+AskUserQuestion({
+  questions: [{
+    question: "How did yesterday go?",
+    header: "Check-in",
+    multiSelect: false,
+    options: [
+      { label: "Pass — skip today",  description: "No reflection this morning" },
+      { label: "Come back to this", description: "Not ready yet — revisit at the end" }
+    ]
+  }]
+})
+```
+
+The runtime auto-appends "Other" as a free-text option. The prefabs are literal opt-outs, not content frames — Mike types real reflection into Other.
+
+**3. Batch questions** — put multiple `{question, header, multiSelect, options}` objects in the same `questions` array (up to 4) when several decisions arrive together (e.g., multiple orchestrator warnings). One call, multiple buttons rendered together.
+
+**4. Iterative digging stays in plain text.** `AskUserQuestion` covers the FIRST turn of a reflection. When Mike responds with real content (whether via option click OR free-text), **continue the conversation in plain text** — follow-up probes, feelings-digging, pattern-noticing. Those aren't new top-level questions; they're a continuing exchange. A chained `AskUserQuestion` for every follow-up would turn reflection into a form. Once reflection is underway, stay in conversation mode until Mike signals he's ready to move on.
 
 ### Never regurgitate structured data to Mike
 
