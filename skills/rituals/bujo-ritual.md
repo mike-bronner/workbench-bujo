@@ -21,13 +21,15 @@ This ritual is **not an automated summary.** Every step that asks Mike a questio
 
 Every interactive prompt is made by **calling the `AskUserQuestion` tool**. That's a tool invocation, not a formatting convention. If you write a question in chat and list options as bullets or "Pick one:" prose, **you have NOT asked the question correctly** — there will be no button UI, no "awaiting input" indicator, and the session will appear complete.
 
-**Load the tool first.** `AskUserQuestion` is a deferred tool. Before the first interactive prompt, load its schema:
+**Load deferred tools first.** Both `AskUserQuestion` and the scribe MCP verbs are typically deferred — listed in the allow-list, but with unloaded schemas. Calling them before loading returns `InputValidationError`, **which is NOT the server being offline** — it just means the schema isn't in context yet. Batch-load them in a single ToolSearch call at the very start of the ritual:
 
 ```
-ToolSearch(query="select:AskUserQuestion", max_results=1)
+ToolSearch(query="select:AskUserQuestion,mcp__plugin_workbench-bujo_scribe__bujo_read,mcp__plugin_workbench-bujo_scribe__bujo_scaffold,mcp__plugin_workbench-bujo_scribe__bujo_apply_decisions,mcp__plugin_workbench-bujo_scribe__bujo_scan,mcp__plugin_workbench-bujo_scribe__bujo_summarize", max_results=6)
 ```
 
-Do this once per session (it stays loaded). Then for every interactive prompt, actually invoke the tool with a structured payload — not prose.
+Do this once per session — schemas stay loaded for the rest of the run. If any later call surprises you with `InputValidationError`, re-run the ToolSearch; never conclude the scribe is down.
+
+Then for every interactive prompt, actually invoke `AskUserQuestion` with a structured payload — not prose.
 
 **What "correct" looks like in a tool call:**
 
@@ -252,7 +254,39 @@ Compose a single ordered list:
 - **Never pre-interpret** what a feeling means. Surface it; let Mike name it.
 - **Depth over coverage.** If reviewing every item takes 45 minutes for a monthly, that's fine. Speed-running defeats the purpose.
 
-After all items are processed, dispatch captured dispositions as `bujo_apply_decisions` calls — batched per source note.
+### 🔴 CRITICAL — dispatch dispositions back to the SOURCE note
+
+Capturing a disposition in conversation is NOT enough. **Every disposition Mike picks must be written back to the source note via `bujo_apply_decisions`** — otherwise yesterday's items stay as active `•` tasks and the journal lies about what happened.
+
+After all items are processed, batch the captured dispositions into one `bujo_apply_decisions` call **per source note** (typically just yesterday for a daily ritual). The source note is where the items LIVE — that's where they get their disposition stamped, regardless of which tier you're running.
+
+**What each disposition translates to:**
+
+| Mike said... | Decision op | Effect on source note |
+|---|---|---|
+| Carry forward | `migrate` | Source line signifier → `>` (migrated). Cross-note: fresh `•` task appended to today. |
+| Drop | `drop` | Source line gets `<s>...</s>` strikethrough wrap. |
+| Schedule for later | `schedule` | Source line signifier → `<` (scheduled). Cross-note: entry appended to Future Log. |
+| Mark complete | `complete` | Source line signifier → `×` (completed). |
+
+**Concrete example** — Mike reviewed 3 items on yesterday's note: carry one, drop one, complete one:
+
+```jsonc
+bujo_apply_decisions({
+  note: "yesterday",
+  decisions: [
+    { op: "migrate",  bullet: "Ship the orchestrator agent", target: "today" },
+    { op: "drop",     bullet: "Refactor the legacy logger" },
+    { op: "complete", bullet: "Pay the electric bill" }
+  ]
+})
+```
+
+After this call, yesterday's note shows `> Ship the orchestrator agent`, `<s>• Refactor the legacy logger</s>`, and `× Pay the electric bill`. Today's note has a fresh `• Ship the orchestrator agent` appended via the migrate's cross-note effect.
+
+**Verification step (mandatory):** after the `apply_decisions` call, check the returned `diff` and `unmatched` fields. If any decision landed in `unmatched` (e.g., `"NOT_FOUND"` — bullet anchor didn't match), tell Mike which one and retry with the exact text from the note. Don't silently drop a disposition.
+
+**Do NOT use `scaffold` as a substitute for migrate.** Scaffold writes to the target note (today) only — it cannot update yesterday's signifiers. If you reach Step 4 without having called `apply_decisions` on yesterday, stop and fix it first.
 
 ---
 
@@ -265,10 +299,11 @@ Dispatch `bujo_scaffold` with:
 - `ritual` = your tier (`daily`, `monthly`, or `yearly`)
 - `mode: merge` (creates if absent; merges if already started)
 - `sections` assembled from:
-  - **Migrated items** from Step 3
   - **Calendar events** for the period (via DataSource backend when implemented; until then, ask Mike or skip)
   - **Future Log items surfacing** in this period (from `bujo_read("future_log")` — match by date)
   - **Themes / intentions** captured during reflection (if any)
+
+**Do NOT add "migrated items" to scaffold sections.** Step 3's `migrate` decisions already appended carry-forward items to today's note via the scribe's cross-note effect. Re-adding them here is either a no-op (scaffold merge dedupes by text) or a duplication risk. Scaffold's job is the *new stuff* today needs — events, future-log surfacers, intentions — not items that already landed.
 
 Setup-time ordering (events → tasks → notes) is applied by the MCP automatically. Don't pre-sort.
 
