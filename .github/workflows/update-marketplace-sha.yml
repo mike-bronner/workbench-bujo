@@ -9,7 +9,7 @@ name: Update marketplace SHA
 # omit to use the latest release).
 #
 # Prerequisites:
-# - Secret `MARKETPLACE_UPDATE_TOKEN` set at the repo or org level.
+# - Secret `DEVELOPER_SETTINGS_TOKEN` set at the repo or org level.
 #   Classic PAT with `repo` scope (sufficient to push to the marketplace repo).
 #
 # Portability: this workflow reads the plugin's own name from
@@ -75,7 +75,7 @@ jobs:
 
       - name: Update marketplace.json
         env:
-          GH_TOKEN: ${{ secrets.MARKETPLACE_UPDATE_TOKEN }}
+          GH_TOKEN: ${{ secrets.DEVELOPER_SETTINGS_TOKEN }}
           PLUGIN_NAME: ${{ steps.resolve.outputs.plugin_name }}
           TAG: ${{ steps.resolve.outputs.tag }}
           SHA: ${{ steps.resolve.outputs.sha }}
@@ -83,9 +83,9 @@ jobs:
           set -euo pipefail
 
           if [ -z "${GH_TOKEN:-}" ]; then
-            echo "::error::MARKETPLACE_UPDATE_TOKEN secret is not set."
+            echo "::error::DEVELOPER_SETTINGS_TOKEN secret is not set."
             echo "Create a fine-grained PAT with Contents:Read+Write on mike-bronner/claude-workbench"
-            echo "and add it as MARKETPLACE_UPDATE_TOKEN in this repo's secrets."
+            echo "and add it as DEVELOPER_SETTINGS_TOKEN in this repo's secrets."
             exit 1
           fi
 
