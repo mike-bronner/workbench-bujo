@@ -24,9 +24,27 @@ Call `mcp__ccd_session__mark_chapter` at each major phase transition so Mike has
 
 Don't mark trivially — only at real transitions.
 
-## Step 1 — compute today, dispatch orchestrator
+## Step 1 — compute today, pre-warm scribe, dispatch orchestrator
 
 Compute today's date and timezone from the environment (America/Phoenix by default, or whatever's set in `~/.claude/plugins/data/workbench-bujo-claude-workbench/config.json`).
+
+### 1a. Pre-warm the scribe MCP
+
+Claude Code's MCP lifecycle can take ~10s from cold (spawn → handshake → `tools/list` → deferred-schema registration). Subagents inherit the parent's MCP connections, so warming the scribe here means the orchestrator sees it ready at dispatch — no "offline" misreads.
+
+Before dispatching the agent:
+
+1. Load the deferred schema in this (parent) conversation:
+   ```
+   ToolSearch(query="select:mcp__plugin_workbench-bujo_scribe__bujo_read", max_results=1)
+   ```
+2. Make one trivial call to force the handshake:
+   ```
+   bujo_read(payload={ notes: ["today"] })
+   ```
+   Discard the result — this is a warm-up, not state inspection. That's the orchestrator's job. If this call errors with a transport/connection error (not `InputValidationError`), wait 2s and retry up to 3 times. If it still fails, surface the error to Mike and stop — the scribe really is down.
+
+### 1b. Dispatch the orchestrator
 
 Dispatch the `bujo-orchestrator` agent with a short, explicit prompt:
 
