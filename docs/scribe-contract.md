@@ -126,6 +126,9 @@ decisions:
   - op: drop           # strike through
     bullet: "..."
 
+  - op: undrop         # reverse a previous drop (clear strikethrough)
+    bullet: "..."
+
   - op: add            # append new bullet to a section
     section: "<section name>"
     bullet: { signifier, text, priority?, owner?, source? }
@@ -158,6 +161,7 @@ cross_note_effects:                     # e.g. migrate writes to target too
 - Reads `index`, then reads `note` fresh, then writes.
 - `migrate` mutates BOTH notes (strike/mark `>` in source, append to target) — both appear in `cross_note_effects` and the main `diff`.
 - `combine` mutates BOTH notes: source bullet gets `>` (migrated) just like `migrate`, and a new `sub_item` (depth=1) is inserted on `target_note` **immediately after** the `parent_bullet`. Atomic — if `target_note` is missing (`NOT_FOUND`) or `parent_bullet` can't be resolved (`PARENT_NOT_FOUND` / `AMBIGUOUS_PARENT`), the source is NOT mutated and the decision lands in `unmatched`.
+- `undrop` is the inverse of `drop`: clears the `dropped` flag (removes strikethrough), preserves the signifier and text. If the matched line isn't currently dropped, returns `NOT_DROPPED` — not a silent no-op. Use when a task was dropped in error and needs to come back (e.g., the ritual misinterpreted "combine into X" as "drop").
 - Ambiguous matches (bullet text matches >1 bullet) → `AMBIGUOUS_BULLET`, added to `unmatched`. Not applied.
 - Missing bullet matches → `NOT_FOUND`, added to `unmatched`. Not applied.
 
@@ -254,6 +258,7 @@ Empty arrays omitted.
 | `AMBIGUOUS_BULLET` | decision's bullet matches >1 candidate in target |
 | `NOT_FOUND` | decision's bullet doesn't match any candidate |
 | `STALE_WRITE_DETECTED` | note changed between read and write — scribe retries once, then errors |
+| `NOT_DROPPED` | `undrop` targeted a line that wasn't dropped — prevents silent no-ops |
 
 Errors are structured:
 ```yaml

@@ -294,6 +294,7 @@ After all items are processed, batch the captured dispositions into one `bujo_ap
 | Carry forward | `migrate` | Source line signifier → `>` (migrated). Cross-note: fresh `•` task appended to today. |
 | Combine into X | `combine` | Source line signifier → `>` (migrated). Cross-note: sub-item inserted right after parent bullet X on target note. |
 | Drop | `drop` | Source line gets `<s>...</s>` strikethrough wrap. |
+| Restore / undrop / bring back | `undrop` | Source line loses its `<s>...</s>` strikethrough. Signifier preserved. Use when a prior drop was wrong. Fails with `NOT_DROPPED` if the line wasn't actually dropped. |
 | Schedule for later | `schedule` | Source line signifier → `<` (scheduled). Cross-note: entry appended to Future Log. |
 | Mark complete | `complete` | Source line signifier → `×` (completed). |
 
