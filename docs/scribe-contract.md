@@ -137,6 +137,11 @@ decisions:
   - op: reorder
     section: "<section name>"
     order: ["<bullet text>", ...]
+
+  - op: combine         # fold into another task as nested sub-item
+    bullet: "..."        # source bullet on `note`
+    target_note: "..."   # note that holds the parent
+    parent_bullet: "..." # parent bullet on target_note
 ```
 
 **Output:**
@@ -152,6 +157,7 @@ cross_note_effects:                     # e.g. migrate writes to target too
 **Behavior:**
 - Reads `index`, then reads `note` fresh, then writes.
 - `migrate` mutates BOTH notes (strike/mark `>` in source, append to target) — both appear in `cross_note_effects` and the main `diff`.
+- `combine` mutates BOTH notes: source bullet gets `>` (migrated) just like `migrate`, and a new `sub_item` (depth=1) is inserted on `target_note` **immediately after** the `parent_bullet`. Atomic — if `target_note` is missing (`NOT_FOUND`) or `parent_bullet` can't be resolved (`PARENT_NOT_FOUND` / `AMBIGUOUS_PARENT`), the source is NOT mutated and the decision lands in `unmatched`.
 - Ambiguous matches (bullet text matches >1 bullet) → `AMBIGUOUS_BULLET`, added to `unmatched`. Not applied.
 - Missing bullet matches → `NOT_FOUND`, added to `unmatched`. Not applied.
 

@@ -236,13 +236,40 @@ Compose a single ordered list:
 
 4. **No feelings → accept and move on.** "Sometimes things are just what they are. Ready for the next?"
 
-5. **Capture the disposition** that emerges. If the reflection already implied a disposition, confirm it conversationally (via a yes/no `AskUserQuestion`). If it's still open, use `AskUserQuestion` with the four decisions below. **Set a `preview` field** on each option showing the item's full context — original text, days open, migration count — so Mike sees the full picture on hover without it cluttering the chat.
+5. **Capture the disposition** that emerges. If the reflection already implied a disposition, confirm it conversationally (via a yes/no `AskUserQuestion`). If it's still open, use `AskUserQuestion` with the decisions below. **Set a `preview` field** on each option showing the item's full context — original text, days open, migration count — so Mike sees the full picture on hover without it cluttering the chat.
 
    - **Carry forward** — migrate to current-tier target
+   - **Combine into another task** — fold this item under a parent task as a nested sub-item (see "Combine" below)
    - **Drop** — mark as dropped (or confirm the existing drop)
    - **Schedule for later** — schedule forward (date required, must be future)
    - **Mark complete** — already done
    - *(Other auto-appended — e.g., "leave as-is" for deliberately in-flight items)*
+
+   #### Combine — the "fold this under X" disposition
+
+   **When Mike says any of these, the disposition is combine — NOT drop:**
+   - "combine this into X"
+   - "fold this under X" / "fold this into X"
+   - "make this a sub-item of X"
+   - "nest this under X"
+   - "X covers this" / "this belongs under X"
+
+   Dropping an item says *let it go*. Combining says *keep it, but as a child of a broader task*. These are different — never conflate them. If Mike's phrasing is at all ambiguous, confirm: "fold under X, or just drop?"
+
+   For a combine, you need two things: the **target note** (which note holds the parent) and the **parent bullet** (which bullet on that note is the parent). Usually the parent is on today's note — confirm with Mike if the parent isn't obvious from context. Then dispatch:
+
+   ```jsonc
+   {
+     op: "combine",
+     bullet: "<source anchor — exact text from source note>",
+     target_note: "today",        // or explicit title like "2026-04-20 — Monday"
+     parent_bullet: "<parent anchor — exact text from target note>"
+   }
+   ```
+
+   **Effect:** source gets `>` (migrated) just like a normal migrate. On the target, a new sub-item (depth=1, `-` signifier) is inserted right after the parent, carrying the source text + prefix. The source's priority/inspiration/explore prefix is preserved on the sub-item.
+
+   **Failure modes** — `combine` is atomic. If the target note doesn't exist (`NOT_FOUND`) or the parent bullet can't be found / is ambiguous (`PARENT_NOT_FOUND` / `AMBIGUOUS_PARENT`), the source is NOT mutated and the decision lands in `unmatched`. Check `unmatched` after the batch call; if a combine failed, tell Mike which parent text was missing and retry with the exact anchor.
 
 6. **If a potential_gap surfaces something worth capturing**, add it to the previous period's log via `bujo_apply_decisions` with an `add` op.
 
@@ -265,6 +292,7 @@ After all items are processed, batch the captured dispositions into one `bujo_ap
 | Mike said... | Decision op | Effect on source note |
 |---|---|---|
 | Carry forward | `migrate` | Source line signifier → `>` (migrated). Cross-note: fresh `•` task appended to today. |
+| Combine into X | `combine` | Source line signifier → `>` (migrated). Cross-note: sub-item inserted right after parent bullet X on target note. |
 | Drop | `drop` | Source line gets `<s>...</s>` strikethrough wrap. |
 | Schedule for later | `schedule` | Source line signifier → `<` (scheduled). Cross-note: entry appended to Future Log. |
 | Mark complete | `complete` | Source line signifier → `×` (completed). |
