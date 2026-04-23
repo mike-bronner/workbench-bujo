@@ -1,0 +1,130 @@
+# =============================================================================
+# bujo-scribe-mcp — default rules
+#
+# Ryder Carroll Bullet Journal methodology + decisions from the 7-gap audit in
+# workbench-bujo/docs/rules-decisions.md. Users override individual keys via
+# their own YAML file at the path configured in BUJO_SCRIBE_USER_RULES_PATH.
+#
+# Deep-merge semantics: user keys override defaults at any depth; lists
+# replace entirely.
+#
+# NOTE: Most values below equal the pydantic model defaults, so this file is
+# primarily a readable spec and a starting point for user overrides. The loader
+# still validates every entry — so if a key drifts between this YAML and the
+# schema, tests catch it.
+# =============================================================================
+
+version: 1
+timezone: America/Phoenix
+
+signifiers:
+  base:
+    task: "•"
+    event: "○"
+    note: "—"
+    completed: "x"
+    migrated: ">"
+    scheduled: "<"
+    sub_item: "-"
+  prefix:
+    priority: "✽"
+    inspiration: "!"
+    explore: "◉"
+  dropped:
+    method: strikethrough_html
+  scheduled:
+    requires_future_date: true
+    auto_populate_future_log: true
+
+alignment:
+  nonprefixed_leading: nbsp_single
+  sub_item_indent_per_depth: nbsp_pair
+  sub_item_max_depth: 2
+
+classification:
+  agency:
+    task_definition: >-
+      Coordinates, executes, or runs; active effort beyond showing up.
+    event_definition: >-
+      Happens outside agency OR passive participation.
+  family_calendar:
+    enabled: false
+    self_markers: []
+    other_markers: []
+
+prefix_discipline:
+  strip_action_test_enabled: true
+  inspiration_plus_action: two_entries
+
+entry_style:
+  prefer_single_line: true
+  single_block: true
+  setup_time_ordering:
+    enabled: true
+    order: [events, tasks, notes]
+
+tiers:
+  all_single_block: true
+
+naming:
+  daily: "%Y-%m-%d — %A"
+  weekly: "%Y-%m-%d - Week %U"   # %U = Sunday-based week number; pair with week_start_day=sunday
+  monthly: "%Y-%m - %B"
+  yearly: "%Y - Yearly Review"
+  week_start_day: sunday          # or "monday" for ISO/business convention
+
+run_order:
+  sequence: [yearly, monthly, weekly, daily]
+  prerequisites:
+    daily:
+      sunday: [weekly]
+      month_start: [monthly]
+      year_start: [yearly]
+    weekly:
+      month_start: [monthly]
+      year_start: [yearly]
+    monthly:
+      year_start: [yearly]
+    yearly: {}
+
+carry_forward:
+  weekly:
+    - "all incomplete tasks from the most recent daily log"
+    - "insights (!—) from daily entries since the previous weekly log"
+    - "significant items from the past week"
+    - "Future Log items scheduled for the upcoming week"
+  monthly:
+    - "all incomplete tasks from the most recent daily log"
+    - "insights or significant items from weekly logs of the past month"
+    - "Future Log items occurring in the upcoming month"
+  yearly:
+    - "all incomplete tasks from the most recent daily log"
+    - "insights or significant items from monthly logs of the past year"
+    - "Future Log items for the upcoming year"
+
+harvest_routing:
+  enabled: true
+  tags:
+    daily_to_weekly: "→ Routed to weekly"
+    weekly_to_monthly: "→ Routed to monthly"
+    monthly_to_yearly: "→ Routed to yearly"
+  terminal_tier: yearly
+
+future_log:
+  enabled: true
+  note_title: "Future Log"
+  on_schedule_day_behavior: pull_and_remove
+
+backends:
+  apple_notes:
+    folder: "📓 Journal"
+    index_note_title: "📓 Journal Index"
+    html:
+      monospace_wrapper: '<div><font face="Menlo-Regular"><tt>{content}</tt></font></div>'
+      blank_line: "<div><br></div>"
+      nbsp_encoding: "&nbsp;"
+      strikethrough_open: "<s>"
+      strikethrough_close: "</s>"
+      title_open: '<div><b><span style="font-size: 24px">'
+      title_close: '</span></b><br></div>'
+      heading_h2_size_px: 18

@@ -82,25 +82,18 @@ claude plugin install /absolute/path/to/workbench-bujo
 
 After installation, restart Claude Code so the plugin's agents, skills, commands, and MCP server are picked up.
 
-### 2. The scribe MCP auto-installs — nothing for you to do
+### 2. The scribe MCP runs from source — nothing for you to do
 
-Starting with v0.4.0, the plugin bundles a matching version of the scribe MCP as a Python wheel at `assets/scribe/bujo_scribe_mcp-X.Y.Z-py3-none-any.whl`. The plugin's MCP launcher auto-installs it the first time an MCP launch happens, and auto-updates on version mismatch after every plugin update.
+Starting with v0.7.0, the scribe MCP source lives in this repo at [`scribe/`](scribe/) and is launched via `uv run --project ${CLAUDE_PLUGIN_ROOT}/scribe bujo-scribe-mcp serve`. No bundled wheel, no auto-install dance — `uv` resolves dependencies from `scribe/pyproject.toml` and caches the venv after the first invocation.
 
 **Requirements:**
-- `uv` must be on PATH ([install uv](https://docs.astral.sh/uv/getting-started/installation/)). The launcher uses `uv tool install` under the hood.
+- `uv` must be on PATH ([install uv](https://docs.astral.sh/uv/getting-started/installation/)).
 
 **What happens on first plugin launch:**
-1. Launcher checks `$HOME/.local/bin/bujo-scribe-mcp` and common fallback locations.
-2. If not found (or version differs from the bundled wheel), runs `uv tool install --from <bundled wheel> bujo-scribe-mcp --force`.
-3. Execs the freshly-installed binary to start the MCP server.
+1. `uv run --project scribe/ ...` resolves dependencies and creates a cached venv (~5–10s, one time).
+2. Subsequent sessions reuse the cached venv — overhead is ~150–300ms.
 
-Version tracking happens via `bujo-scribe-mcp --version` on the installed binary compared against the wheel's filename. Plugin updates ship a new wheel; next MCP launch notices the delta and reinstalls silently.
-
-**Manual install (optional):** if you want to pre-install for testing or to bypass the launcher auto-install:
-
-```
-uv tool install --from /path/to/workbench-bujo/assets/scribe/bujo_scribe_mcp-*.whl bujo-scribe-mcp
-```
+**Local dev:** edit `scribe/src/bujo_scribe_mcp/...`, restart the session, changes are live. No build step.
 
 ### 3. Run setup
 
@@ -282,4 +275,4 @@ claude plugin install /absolute/path/to/workbench-bujo  # re-installs fresh
 
 Either way, re-run `/workbench-bujo:bujo-setup` to sync the scheduled-task prompt with the updated ritual definitions.
 
-The scribe MCP updates automatically when you update the plugin — the bundled wheel ships with each plugin release and the MCP launcher reinstalls on version mismatch at next MCP start. You don't need to do anything separately.
+The scribe MCP source ships inside the plugin under [`scribe/`](scribe/) — `uv run --project` picks up the new code on the next session. If dependencies changed, `uv` re-resolves automatically. Nothing to install separately.

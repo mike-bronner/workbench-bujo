@@ -1,0 +1,5 @@
+scribe/.venv/
+scribe/dist/
+scribe/**/__pycache__/
+scribe/*.egg-info/
+.DS_Store

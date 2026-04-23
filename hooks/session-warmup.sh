@@ -11,6 +11,11 @@
 
 set -u
 
+# Pre-warm Apple Notes so the scribe MCP's first AppleScript call is fast.
+# Backgrounded + double-forked; never blocks session start, no output.
+# Idempotent — if Notes is already running, this is a no-op.
+( osascript -e 'tell application "Notes" to launch' >/dev/null 2>&1 & ) &
+
 cat <<'EOF'
 # 📓 BuJo routing
 

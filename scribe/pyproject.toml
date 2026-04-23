@@ -1,0 +1,39 @@
+[project]
+name = "bujo-scribe-mcp"
+version = "0.7.0"
+description = "MCP server for Bullet Journal ritual execution — reads/writes a notebook backend (Apple Notes today; others later) following the 📓 Journal Index rules."
+readme = "README.md"
+authors = [{ name = "Mike Bronner" }]
+license = { text = "MIT" }
+keywords = ["apple-notes", "bujo", "bullet-journal", "claude", "mcp"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: MacOS :: MacOS X",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+]
+requires-python = ">=3.11"
+dependencies = [
+  "mcp>=1.2.0",
+  "pydantic>=2.6",
+  "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+dev = [
+  "mypy>=1.10",
+  "pytest>=8.0",
+  "pytest-asyncio>=0.23",
+  "ruff>=0.4",
+]
+
+[project.scripts]
+bujo-scribe-mcp = "bujo_scribe_mcp.__main__:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/bujo_scribe_mcp"]
