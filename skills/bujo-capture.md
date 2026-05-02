@@ -82,20 +82,26 @@ Then dispatch the add.
 
 ## Interaction pattern
 
-**Proactive (recommended):** when Hobbes notices something capture-worthy, inline:
+**Auto-dispatch (default for unambiguous moments):** when the trigger is unambiguous (see the SessionStart hook's "Auto-capture" list — concrete completions, named decisions, voiced insights, real-world events, agent-completed work that produced an artifact), **dispatch without asking**. Confirm with one line:
 
-> "🪶 Worth capturing: `!— Architecture shift: MCP owns invariants, skills get drifty`. Adding to today?"
+> "🪶 Logged: `!— Architecture shift: MCP owns invariants, skills get drifty`"
 
-Wait for confirmation (or let Mike redirect/reword). Then dispatch.
+The whole point of mid-conversation capture is that it shouldn't add friction. Each "should I capture this?" prompt at an unambiguous moment is a tax on Mike's flow — the journal is supposed to *follow* his work, not interrupt it.
 
-**Manual:** Mike invokes `/workbench-bujo:bujo-capture` with content. Skill dispatches without asking confirmation (he already decided it's worth logging).
+**Ask-first (only for ambiguous moments):** when it's not clear whether something lands as capture-worthy (a pivot that might be exploration, a frustration without clear stakes, a thinking-aloud moment), offer one line:
+
+> "🪶 Worth capturing: `! Pivot: ...`?"
+
+One offer, then drop it if Mike doesn't engage. Don't pile up.
+
+**Manual via slash command:** Mike invokes `/workbench-bujo:bujo-capture` with content. Dispatch without asking — he already decided.
 
 ## Hard rules
 
 1. **Signal-to-noise ratio is sacred.** Over-capturing makes the journal useless. Under-capture if uncertain.
 2. **Single line.** Multi-line captures belong in a ritual reflection, not mid-conversation.
 3. **Mike's voice, not yours.** Write the capture as a neutral observation or in Mike's words. Never editorialize or add your own interpretation.
-4. **Don't capture without confirmation** unless the skill was invoked via the slash command (in which case Mike has already confirmed).
-5. **Never capture private/embarrassing content** that Mike wouldn't want in a note he might re-read. If a moment is raw, ask first.
+4. **Auto-dispatch unambiguous captures; ask-first only for ambiguous ones.** The hook's "Auto-capture" list defines which category each trigger falls into. Confirming a clear capture wastes Mike's attention; skipping a confirmation on an ambiguous one risks a bad write. Use judgment per the hook categories — don't treat every capture as needing confirmation, and don't skip confirmation when the moment isn't crystal clear.
+5. **Never capture private/embarrassing content** that Mike wouldn't want in a note he might re-read. If a moment is raw, ask first regardless of whether it'd otherwise auto-dispatch.
 6. **Respect the day's scaffold.** If today isn't scaffolded yet, scaffold a minimal one; don't refuse to capture.
 7. **Setup-time ordering does not apply to captures.** Mid-day additions append chronologically — the MCP's `mode: merge` handles that correctly.

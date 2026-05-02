@@ -1,6 +1,6 @@
 [project]
 name = "bujo-scribe-mcp"
-version = "0.9.5"
+version = "0.9.6"
 description = "MCP server for Bullet Journal ritual execution — reads/writes a notebook backend (Apple Notes today; others later) following the 📓 Journal Index rules."
 readme = "README.md"
 authors = [{ name = "Mike Bronner" }]
