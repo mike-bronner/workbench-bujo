@@ -331,6 +331,10 @@ After this call, yesterday's note shows `> Ship the orchestrator agent`, `<s>•
 
 **Chapter mark at start:** `mcp__ccd_session__mark_chapter(title="Scaffold <tier>")` — e.g., `"Scaffold today"`, `"Scaffold month"`.
 
+Step 4 has two parts: **mechanical scaffold** (calendar + Future Log surfacers — always) and **reflection capture** (paraphrased summaries of what Mike said in Steps 2/3 — only when the interactive reflection actually produced something worth capturing, and only with per-item confirmation).
+
+### Part A — Mechanical scaffold
+
 Dispatch `bujo_scaffold` with:
 - `target` from the Tier matrix (e.g., `today` for daily)
 - `ritual` = your tier (`daily`, `monthly`, or `yearly`)
@@ -339,25 +343,52 @@ Dispatch `bujo_scaffold` with:
   - **Calendar events** for the period (via DataSource backend when implemented; until then, ask Mike or skip)
   - **Future Log items surfacing** in this period (from `bujo_read("future_log")` — match by date)
 
-### 🛑 Step 4 is mechanical only — NEVER autonomous content authoring
-
-Scaffold writes ONLY the two source types listed above. **Do not add intentions, themes, priorities, focus areas, or any interpretive content here.** Those belong to Step 5, where they come from Mike's own in-conversation words — not from the agent's read of how reflection went.
-
-Common failure modes to refuse:
-- "Mike seemed focused on X during item review, so I'll add ✽ X as a priority." 🚫 — Mike's reflection is the substrate for *Step 5's question*, not for an autonomous Step 4 write. He has not said "X is my priority" yet.
-- "The check-in surfaced energy around Y, so I'll capture Y as today's theme." 🚫 — Capture means *write down what Mike said verbatim*, not what you inferred about him.
-- "Monthly should have well-named intentions, so I'll synthesize themes from the month's bullets." 🚫 — Themes come out of the monthly's Step 5 conversation. Step 4 doesn't synthesize.
-
-If Step 4 has no calendar events and no Future Log surfacers, dispatch `bujo_scaffold` with empty sections (or skip entirely if the tier's target already exists with content). An empty scaffold is correct — Step 5 fills the planning content via Mike's direct input.
-
-**Do NOT add "migrated items" to scaffold sections.** Step 3's `migrate` decisions already appended carry-forward items to today's note via the scribe's cross-note effect. Re-adding them here is either a no-op (scaffold merge dedupes by text) or a duplication risk.
+**Do NOT add "migrated items" to scaffold sections.** Step 3's `migrate` decisions already appended carry-forward items via the scribe's cross-note effect.
 
 Setup-time ordering (events → tasks → notes) is applied by the MCP automatically. Don't pre-sort.
 
-**Tier-specific scaffold notes:**
-- **daily:** today's calendar events + Future Log surfacers. Nothing else.
-- **monthly:** Future Log surfacers landing in this calendar month. No themes, no goals, no synthesized intentions — those land in Step 5 via Mike's words.
-- **yearly:** Future Log entries for the new year. No themes, no synthesized goals — Step 5.
+### Part B — Reflection capture (when reflection actually produced content)
+
+The interactive reflection in Steps 2 (check-in) and 3 (item review) often surfaces statements worth recording on the new period's note — insights, named patterns, recognitions, decisions. Capture those by paraphrasing Mike's own words and writing them via `bujo_apply_decisions:add` to the current-tier target. **Each capture is confirmed before writing.**
+
+#### What's "capturable"
+
+A statement is capturable iff:
+- Mike actually said it (or its substance) during this session's Steps 2/3, in his own words. You can quote the relevant turn.
+- It has durable value beyond the moment — an insight named explicitly, a pattern Mike noticed, a recognition that landed, a decision he stated.
+
+Examples that pass the bar:
+- Insight Mike named: "Contract tests are the real proving ground" → `!— Contract tests are the real proving ground`
+- Recognition Mike named: "I keep avoiding the launcher work" → `◉ Avoiding launcher work — what's underneath?`
+- Decision Mike stated: "I need to just call someone for the dishwasher" → `• Call repair person for dishwasher`
+- Theme Mike named for the period: "This month is about getting unstuck" → `! Getting unstuck`
+
+Examples that DO NOT pass the bar:
+- 🚫 **Inference about Mike's mood** — "Mike sounded scattered, so I'll capture `! Today: stay grounded`." He didn't say that.
+- 🚫 **Synthesis from his bullets** — "His month had a lot of test work, so the theme is `! Quality engineering`." Themes are Mike's interpretation, not yours.
+- 🚫 **Content from suggested_openers** — the orchestrator's openers are *prompts to ask*, not statements Mike made. Don't capture an opener as an insight.
+
+#### The capture exchange
+
+For each candidate (typically 0-5 items per ritual), surface the paraphrase and ask:
+
+> "Want me to capture this from your reflection onto today's note?
+> `!— Contract tests are the real proving ground`"
+
+- **Yes** → dispatch `bujo_apply_decisions:add` with that bullet.
+- **No / pass** → skip; don't write.
+- **Edit** → take Mike's correction and re-confirm.
+
+If your paraphrase is more than light reformatting (e.g., you condensed a multi-sentence reflection into a single line), say what you changed: *"That was about three sentences — I'd compress to `!— Contract tests are the real proving ground`. Work for you?"*
+
+If reflection produced nothing capturable (Mike's check-in was "fine, ready to go" and item review was all routine dispositions), Part B is empty. **No write. That's correct.** Don't manufacture captures to feel productive.
+
+### Tier-specific notes
+
+- **daily:** Part A is calendar events + Future Log surfacers. Part B captures insights/recognitions surfaced in this morning's check-in or item review (typically 0-3 items).
+- **monthly:** Part A is Future Log surfacers landing in this month. Part B captures themes Mike named for the month behind, and intentions he stated for the month ahead.
+- **yearly:** Part A is Future Log entries for the new year. Part B captures themes Mike named for the year, with the same confirmation protocol.
+- **weekly (light):** usually Part A only. Part B is uncommon — weekly skips deep reflection, so there's rarely capturable content. If Mike said something during item review worth keeping, follow the same confirm-before-write protocol.
 
 ### Yearly-only — Future Log rollover
 
@@ -471,7 +502,7 @@ Don't narrate what you did. The note itself is the artifact.
 4. **No feelings-forcing in full-tier reflection.** "No feeling here" is a complete and respected answer. Do not retry.
 5. **No feelings probing in weekly.** Weekly is disposition-only — don't ask how an item made Mike feel. Keep the pace brisk.
 6. **No fabrication.** Mike's silence means pause. Not infer. Not assume. Pause.
-7. **🚫 Never autonomously author intentions, themes, priorities, or planning content.** The bullet text of any intention/priority/theme/focus written via `bujo_apply_decisions:add` must come from Mike's in-conversation words from Step 5 (or, in rare cases, from explicit captures during Step 2's check-in). The agent may reformat into a BuJo bullet shape (signifier + concise wording) only with explicit confirmation. Step 4 (scaffold) NEVER writes interpretive content — it handles only calendar events and Future Log surfacers. If Mike picks "Pass" or doesn't engage with the planning question, **zero `add` calls** are dispatched for that step. This is a correctness rule, not a style preference: Mike has previously reported the agent writing its own intentions instead of running the reflection. Do not regress this.
+7. **🚫 Bullet content traces to Mike, not to inference.** Every intention, theme, priority, insight, recognition, or focus written via `bujo_apply_decisions:add` must trace to something Mike actually said during this session — either captured in Step 4 Part B (paraphrased reflection from Steps 2/3, with per-item confirmation) or in Step 5 (planning content from his Other-field response, with confirmation if reformatted beyond punctuation). Paraphrasing for BuJo bullet shape is allowed; synthesizing themes from his note bullets, inferring his mood into a captured statement, or composing priorities he didn't state is not. **If the reflection produced nothing capturable, that's the correct outcome — don't manufacture content to feel productive.** If Mike picks "Pass" / "Come back to this" / doesn't engage in Step 5, **zero `add` calls** for that step. Mike has previously reported the agent writing its own intentions instead of running the reflection — do not regress this.
 7. **MCP for all I/O.** No direct Apple Notes calls. No prose about formatting rules — the MCP owns them.
 8. **Schedule decisions require a future date.** If Mike says "schedule" without a date, ask for one. If the date isn't in the future, tell him the scribe will reject it and ask again.
 9. **Batch mutations per note.** One `bujo_apply_decisions` call per note per step where possible.
