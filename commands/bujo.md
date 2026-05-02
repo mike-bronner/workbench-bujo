@@ -28,9 +28,11 @@ Don't mark trivially — only at real transitions.
 
 Compute today's date and timezone from the environment (America/Phoenix by default, or whatever's set in `~/.claude/plugins/data/workbench-bujo-claude-workbench/config.json`).
 
-### 1a. Pre-warm the scribe MCP
+### 1a. Pre-warm the scribe MCP (best-effort)
 
-Claude Code's MCP lifecycle can take ~10s from cold (spawn → handshake → `tools/list` → deferred-schema registration). Subagents inherit the parent's MCP connections, so warming the scribe here means the orchestrator sees it ready at dispatch — no "offline" misreads.
+Claude Code's MCP lifecycle can take ~10s from cold (spawn → handshake → `tools/list` → deferred-schema registration). Subagents inherit the parent's MCP connections, so warming the scribe here means the orchestrator sees it ready at dispatch — fewer "offline" misreads on the orchestrator side.
+
+**This is a best-effort optimization, NOT a precondition.** Never abort the ritual on warm-up failure — the orchestrator has its own boot-patience retries (see `agents/bujo-orchestrator.md`). Gating dispatch on warm-up turns "scribe is slow" into "ritual is broken," which is the wrong tradeoff.
 
 Before dispatching the agent:
 
@@ -38,11 +40,13 @@ Before dispatching the agent:
    ```
    ToolSearch(query="select:mcp__plugin_workbench-bujo_scribe__bujo_read", max_results=1)
    ```
-2. Make one trivial call to force the handshake:
+2. Make one trivial call to nudge the handshake:
    ```
    bujo_read(payload={ notes: ["today"] })
    ```
-   Discard the result — this is a warm-up, not state inspection. That's the orchestrator's job. If this call errors with a transport/connection error (not `InputValidationError`), wait 2s and retry up to 3 times. If it still fails, surface the error to Mike and stop — the scribe really is down.
+   Discard the result — this is a warm-up, not state inspection.
+
+**On any warm-up error — `InputValidationError`, transport error, schema miss, anything — proceed to Step 1b and dispatch the orchestrator anyway.** Do not retry, do not sleep, do not surface errors to Mike. The orchestrator handles real outages via its own retry loop and `scribe_offline` warning path; let it. Optional: a single brief one-liner in chat ("⏳ scribe still booting; orchestrator will pick up the slack") is fine, but only if the warm-up errored — silent on success.
 
 ### 1b. Dispatch the orchestrator
 
