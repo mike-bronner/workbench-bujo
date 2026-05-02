@@ -11,6 +11,7 @@ This document defines the **contract between Hobbes and the scribe** — the ver
 1. **Index-first.** Every mutation re-reads `📓 Journal Index` before proceeding. No cached rules. If the index is missing → error `INDEX_MISSING`.
 2. **Folder discipline.** All BuJo notes live in the `📓 Journal` folder (notebook emoji included). Every `add_note` passes `folder: "📓 Journal"`. If the folder is missing → error `FOLDER_MISSING`.
 3. **Parallel-edit guard.** Every mutation does `get_note_content` immediately before `update_note_content`. No stale writes.
+   - **Cross-process serialization (≥0.9.0):** mutations also acquire a `flock(2)`-based advisory lock on `${SCRIBE_RUN_DIR}/mutation.lock` for the duration of the read→mutate→write critical section. This serializes mutations across multiple Claude Code sessions running concurrently — without it, two scribe processes can both pass their local guard while still racing each other to clobber the same Apple Notes record. The lock file lives inside the plugin tree (set by `BUJO_SCRIBE_RUN_DIR`); the OS releases the lock automatically on process exit, so abandoned locks never strand the system, and plugin uninstall removes the file with the rest of the plugin.
 4. **Verified diffs.** Every mutation verb returns a structured diff — Hobbes can present it to Mike, not a black-box "ok".
 5. **No improvisation.** If a bullet doesn't match an index rule, the scribe returns a `RULE_VIOLATION` warning — it does not guess.
 6. **Tz-aware.** Dates computed in `America/Phoenix` unless overridden.
@@ -281,6 +282,20 @@ error:
   detail: "<human description>"
   context: { ... }     # verb-specific context
 ```
+
+---
+
+## Runtime / launcher (≥0.9.0)
+
+The scribe MCP is invoked through a launcher script (`scribe/bin/launcher.sh`) rather than `uv run` directly. On first launch (or after a version bump), the launcher installs `scribe/wheels/bujo_scribe_mcp-X.Y.Z-py3-none-any.whl` into a stable venv at `scribe/.venv-stable/`, then `exec`s `scribe/.venv-stable/bin/bujo-scribe-mcp` directly. Steady-state cold start drops from ~1-3s (with `uv run`) to ~50ms.
+
+Environment contract:
+
+- `BUJO_SCRIBE_RUN_DIR` — directory for plugin-local runtime state (the mutation lock file). The launcher sets this to `scribe/run/`. When unset (e.g., scribe invoked outside the launcher in tests or ad-hoc), the scribe falls back to `${TMPDIR}/bujo-scribe-run`.
+
+Dev escape hatch: set `BUJO_SCRIBE_DEV=1` to bypass the wheel and run from source via `uv run --project`. Use during scribe development to skip the rebuild loop.
+
+All launcher state lives inside the plugin tree (`.venv-stable/`, `run/`, `wheels/`). Plugin uninstall removes the directory and all state with it — no machine-level remnants.
 
 ---
 

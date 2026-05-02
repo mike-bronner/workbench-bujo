@@ -12,6 +12,7 @@ from __future__ import annotations
 
 from bujo_scribe_mcp.backends.base import BackendError
 from bujo_scribe_mcp.context import Context
+from bujo_scribe_mcp.locking import mutation_lock
 from bujo_scribe_mcp.parsing import BujoLine, ParsedNote, parse_note, render_note
 from bujo_scribe_mcp.resolver import resolve
 from bujo_scribe_mcp.schemas import (
@@ -24,6 +25,12 @@ from bujo_scribe_mcp.tools._mutations import build_scaffold_lines
 
 
 def execute(input: ScaffoldInput, *, ctx: Context) -> ScaffoldOutput:
+    # Cross-process serialization — see locking.py.
+    with mutation_lock(ctx.config.run_dir):
+        return _execute_locked(input, ctx=ctx)
+
+
+def _execute_locked(input: ScaffoldInput, *, ctx: Context) -> ScaffoldOutput:
     title = resolve(input.target, rules=ctx.rules)
 
     existing_ref = ctx.backend.find_by_title(title)

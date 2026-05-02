@@ -1,0 +1,173 @@
+name: Release
+
+# One-button release: bumps versions, builds the scribe wheel, commits
+# everything to main, tags, and creates a GitHub release. Triggered
+# manually from the Actions tab — pass the new version (e.g. "0.9.1")
+# and a one-line description.
+#
+# After this workflow completes, `update-marketplace-sha.yml` fires on
+# the release event and pins the new commit SHA in the marketplace.
+#
+# Idempotency: re-running with a version that already exists fails on
+# the tag-create step. Versions go forward only.
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "New version (e.g. 0.9.1) — no `v` prefix"
+        required: true
+        type: string
+      description:
+        description: "Commit + release headline (e.g. 'fast launcher + cross-session lock')"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Validate version
+        env:
+          NEW_VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          if ! [[ "$NEW_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Version must be SemVer X.Y.Z, got: $NEW_VERSION"
+            exit 1
+          fi
+          if git rev-parse "v$NEW_VERSION" >/dev/null 2>&1; then
+            echo "::error::Tag v$NEW_VERSION already exists"
+            exit 1
+          fi
+          CURRENT=$(jq -r '.version' .claude-plugin/plugin.json)
+          echo "Current: $CURRENT → New: $NEW_VERSION"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Bump versions
+        env:
+          NEW_VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+
+          # pyproject.toml
+          sed -i -E "s/^version = \"[^\"]+\"/version = \"$NEW_VERSION\"/" \
+            scribe/pyproject.toml
+
+          # scribe __init__.py
+          sed -i -E "s/^__version__ = \"[^\"]+\"/__version__ = \"$NEW_VERSION\"/" \
+            scribe/src/bujo_scribe_mcp/__init__.py
+
+          # plugin.json
+          jq --arg v "$NEW_VERSION" '.version = $v' .claude-plugin/plugin.json > tmp.json
+          mv tmp.json .claude-plugin/plugin.json
+
+          # uv.lock — regenerate so it matches new pyproject version
+          (cd scribe && uv lock)
+
+          echo "Bumped:"
+          grep '^version' scribe/pyproject.toml
+          grep '__version__' scribe/src/bujo_scribe_mcp/__init__.py
+          jq -r '.version' .claude-plugin/plugin.json
+
+      - name: Run tests
+        run: |
+          set -euo pipefail
+          cd scribe
+          uv run --extra dev pytest
+
+      - name: Build wheel
+        env:
+          NEW_VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          cd scribe
+          rm -f wheels/bujo_scribe_mcp-*.whl
+          uv build
+          mv "dist/bujo_scribe_mcp-${NEW_VERSION}-py3-none-any.whl" wheels/
+          rm -rf dist
+          ls -la wheels/
+
+      - name: Commit, tag, push
+        env:
+          NEW_VERSION: ${{ inputs.version }}
+          DESC: ${{ inputs.description }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add \
+            .claude-plugin/plugin.json \
+            scribe/pyproject.toml \
+            scribe/src/bujo_scribe_mcp/__init__.py \
+            scribe/uv.lock \
+            "scribe/wheels/bujo_scribe_mcp-${NEW_VERSION}-py3-none-any.whl"
+
+          # Remove any stale wheels staged by `git add` of the directory.
+          git diff --cached --name-only | grep '^scribe/wheels/' \
+            | grep -v "${NEW_VERSION}" | xargs -r git rm --quiet 2>/dev/null || true
+
+          if git diff --cached --quiet; then
+            echo "::error::No changes staged — version bump must have been a no-op"
+            exit 1
+          fi
+
+          git commit -m "${NEW_VERSION}: ${DESC}"
+          git tag -a "v${NEW_VERSION}" -m "v${NEW_VERSION} — ${DESC}"
+          git push origin main
+          git push origin "v${NEW_VERSION}"
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NEW_VERSION: ${{ inputs.version }}
+          DESC: ${{ inputs.description }}
+        run: |
+          set -euo pipefail
+          PREV_TAG=$(git tag --sort=-version:refname | grep -v "v${NEW_VERSION}" | head -1 || true)
+          if [ -n "$PREV_TAG" ]; then
+            COMPARE="**Diff:** \`${PREV_TAG}...v${NEW_VERSION}\`"
+          else
+            COMPARE=""
+          fi
+
+          gh release create "v${NEW_VERSION}" \
+            --title "v${NEW_VERSION} — ${DESC}" \
+            --notes "## What changed
+
+${DESC}
+
+${COMPARE}
+
+## Bundled wheel
+
+\`scribe/wheels/bujo_scribe_mcp-${NEW_VERSION}-py3-none-any.whl\` ships in the plugin tree. The launcher (\`scribe/bin/launcher.sh\`) installs it into a per-plugin stable venv on first run, then exec's the binary directly — no \`uv run\` overhead per session.
+
+## Auto-pin
+
+\`update-marketplace-sha.yml\` will fire on this release event and pin v${NEW_VERSION}'s commit SHA in the workbench marketplace." \
+            "scribe/wheels/bujo_scribe_mcp-${NEW_VERSION}-py3-none-any.whl"

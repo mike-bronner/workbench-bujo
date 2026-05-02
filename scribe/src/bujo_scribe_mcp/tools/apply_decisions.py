@@ -18,6 +18,7 @@ from zoneinfo import ZoneInfo
 
 from bujo_scribe_mcp.backends.base import BackendError, NoteRef
 from bujo_scribe_mcp.context import Context
+from bujo_scribe_mcp.locking import mutation_lock
 from bujo_scribe_mcp.parsing import BujoLine, ParsedNote, parse_note, render_note
 from bujo_scribe_mcp.resolver import resolve
 from bujo_scribe_mcp.schemas import (
@@ -58,6 +59,14 @@ from bujo_scribe_mcp.tools._mutations import (
 
 
 def execute(input: ApplyDecisionsInput, *, ctx: Context) -> ApplyDecisionsOutput:
+    # Cross-process serialization — see locking.py for why. Held for the
+    # full read→mutate→write critical section, including any cross-note
+    # effects that touch a second note.
+    with mutation_lock(ctx.config.run_dir):
+        return _execute_locked(input, ctx=ctx)
+
+
+def _execute_locked(input: ApplyDecisionsInput, *, ctx: Context) -> ApplyDecisionsOutput:
     title = resolve(input.note, rules=ctx.rules)
     ref = ctx.backend.find_by_title(title)
     if ref is None:

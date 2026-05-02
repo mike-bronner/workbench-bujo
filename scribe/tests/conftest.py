@@ -83,8 +83,13 @@ def make_backend() -> Iterator[callable]:
 
 
 @pytest.fixture
-def make_context(rules):
-    """Returns a factory: backend -> Context wrapping that backend + default rules."""
+def make_context(rules, tmp_path):
+    """Returns a factory: backend -> Context wrapping that backend + default rules.
+
+    Each test gets its own per-test `run_dir` under pytest's tmp_path, so
+    mutation locks don't leak across tests and the test suite stays
+    parallelizable.
+    """
 
     def _factory(backend: NotebookBackend) -> Context:
         config = Config(
@@ -94,6 +99,7 @@ def make_context(rules):
             timezone=rules.timezone,
             server_name="bujo-scribe-test",
             user_rules_path=None,
+            run_dir=tmp_path / "run",
         )
         return Context(config=config, rules=rules, backend=backend)
 
