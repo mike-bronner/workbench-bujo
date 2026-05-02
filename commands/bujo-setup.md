@@ -68,6 +68,56 @@ After all fields, show the assembled config JSON and ask "Save this configuratio
 1. Create the config directory if it doesn't exist: `mkdir -p $CONFIG_DIR`
 2. Write `config.json` with all collected values, including the single `bujo` schedule entry.
 
+## Step 4.5 — Pre-approve BuJo scribe tools (eliminate JSON dialogs)
+
+By default, Claude Code shows a permission dialog with the tool name + raw JSON args every time the agent calls a scribe tool that isn't pre-approved. For Mike's own journal data, that's friction without security value — the journal is his, the plugin is his, the operations are routine.
+
+Offer to pre-approve the BuJo scribe tools so the dialog stops firing:
+
+```
+AskUserQuestion({
+  questions: [{
+    question: "Auto-approve BuJo scribe tools? (recommended — stops the JSON permission dialog from appearing every time the journal is read or updated)",
+    header: "Permissions",
+    multiSelect: false,
+    options: [
+      { label: "Yes — auto-approve",
+        description: "Adds mcp__plugin_workbench-bujo_scribe__* to ~/.claude/settings.json permissions.allow" },
+      { label: "No — keep prompting",
+        description: "Each scribe call continues to show the JSON dialog" }
+    ]
+  }]
+})
+```
+
+On **Yes**:
+
+1. Read `~/.claude/settings.json` (create with `{}` if it doesn't exist).
+2. Ensure the `permissions.allow` list contains `mcp__plugin_workbench-bujo_scribe__*`. If the structure doesn't exist, create it. If the pattern is already present, this is a no-op.
+3. Write the file back, preserving any other settings (use `jq` or careful Python — never overwrite blindly).
+
+Example shell snippet (adapt as needed):
+
+```bash
+SETTINGS="$HOME/.claude/settings.json"
+PATTERN="mcp__plugin_workbench-bujo_scribe__*"
+mkdir -p "$(dirname "$SETTINGS")"
+[ -f "$SETTINGS" ] || echo '{}' > "$SETTINGS"
+
+# Idempotent insert — adds the pattern only if not present
+jq --arg p "$PATTERN" '
+  .permissions //= {} |
+  .permissions.allow //= [] |
+  if .permissions.allow | index($p) then . else .permissions.allow += [$p] end
+' "$SETTINGS" > "$SETTINGS.tmp" && mv "$SETTINGS.tmp" "$SETTINGS"
+```
+
+Confirm: "✅ Auto-approval set — scribe calls will run silently from now on."
+
+On **No**: skip silently. Mike can re-run `/workbench-bujo:bujo-setup` later if he changes his mind.
+
+**Why this is the right scope:** the pattern matches all bujo scribe tools (`bujo_read`, `bujo_apply_decisions`, `bujo_scaffold`, `bujo_scan`, `bujo_summarize`). It does NOT include other MCPs, Bash, or anything outside the plugin. Mike's existing permissions for everything else are untouched.
+
 ## Step 5 — Verify Journal Folder
 
 Call `mcp__plugin_workbench-bujo_scribe__bujo_read` with `notes: ["index"]`. If the response shows `exists: false` for the index, inform Mike:
