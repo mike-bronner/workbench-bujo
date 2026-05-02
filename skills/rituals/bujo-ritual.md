@@ -148,6 +148,8 @@ reflection_focus:
 
 **Mode matters:** `full` tiers run every step of this protocol including the check-in (Step 2) and the reflective review (Step 3 with feelings probing). `light` tier (weekly) runs ONLY the disposition parts — skips Step 2's check-in entirely, runs Step 3 without the feelings layer, runs Step 5 without the energy check. See per-step notes below.
 
+**Note on the check-in framings above:** the strings in the table are *opening questions*, not the entirety of Step 2. Step 2 is a multi-turn conversation that walks three angles (what happened / how it landed / what carries forward) and only closes when reflection has landed. See Step 2 for the full protocol — the table cell is the door, not the room.
+
 ## MCP tools you use
 
 All I/O goes through `mcp__plugin_workbench-bujo_scribe__*`. Never call Apple Notes directly.
@@ -187,19 +189,58 @@ Keep the parsed lines available as you run the rest of the ritual.
 
 **For daily, monthly, yearly:** this is a single combined step. It replaces both Ryder's PM "how did it go" and his AM "what's missing" — running them together in the morning.
 
-Ask the tier-appropriate check-in question (see Tier matrix Step-2 column):
+### 🚨 The check-in is a multi-turn conversation, NOT a one-shot question
 
-> "How did [yesterday / last month / last year] go? And anything you want to add to its log before we review it?"
+**This is the core failure mode the daily ritual keeps hitting.** The agent asks one question, accepts a one-word answer, and shortcuts to scaffolding. The whole point of the ritual is to surface what yesterday actually was — that takes more than a single Q&A.
 
-**Wait.** Mike's response can contain two kinds of content:
+The check-in runs as a real conversation across **three angles**, in order. Each angle is an anchor for an adaptive exchange — not a script item, and not a checkbox. Mike's responses guide the depth and direction within each angle. The check-in only closes when reflection has *landed* (Mike has reached at least one substantive observation, even if it's small) AND he signals he's done — or he explicitly opts out at the start.
 
-1. **Reflection** — how the period landed (feelings, observations, surprises, arcs). Let him talk. Don't force feelings, but don't skim past them either. If something lands emotionally, follow it — what's it pointing at? Is there a pattern? Does it need a decision? (Same rules as Step 3 reflection: "no feeling here" is a complete answer.)
+#### The three angles
 
-2. **Captures** — things he wants to add to the previous period's log (completed tasks, events that happened, late thoughts). Dispatch `bujo_apply_decisions` on the relevant note with `add` ops.
+1. **🔍 What happened — factual ground.**
+   Opener (tier-appropriate, see Tier matrix Step-2 column).
+   If Mike's first response is one word ("fine," "scattered," "rough"), that's a probe-trigger, not a closer. Probe the texture:
+   - "What does scattered mean in yesterday's terms — too many things, or one thing pulling at you?"
+   - "Walk me through it. What stood out?"
+   - "Where did the day go?"
+   Stay here until you have at least one concrete observation about what actually happened.
 
-Often both come together. Let him speak first, then surface the captures.
+2. **💭 How it landed — felt sense.**
+   Once the factual ground is established, ask how it landed:
+   - daily: "Where did you feel pulled forward yesterday? Where did you feel pushed?"
+   - monthly: "How are you sitting with the month — what's the texture?"
+   - yearly: "What did the year do to you — what changed in you, what didn't?"
+   If Mike has nothing to say about felt sense, accept it after one re-ask ("Anything in your body about it, or just neutral?"), but don't skip the angle. "Neutral" is a real answer; silence isn't.
 
-If Mike's check-in reflection surfaces items that the orchestrator's `reflection_focus` already flagged, make a mental note — you'll still walk them explicitly in Step 3, but don't re-probe the same ground. Carry forward what he said.
+3. **🎯 What carries forward — insight + decision.**
+   The bridge from yesterday to today (or from past period to current):
+   - "Anything from yesterday you want to carry forward — a recognition, a reminder, or something to do differently today?"
+   - "If there's one thing yesterday taught you, what is it?"
+   This often surfaces the most valuable captures — things that belong on yesterday's note as insights, and sometimes things that influence today's planning (Step 5).
+
+#### When to close the check-in
+
+Close iff EITHER:
+- Mike explicitly signals he's done ("done," "next," "that's it," "moving on") AND at least one angle has produced a substantive observation, OR
+- All three angles have been walked, AND you've asked "anything else before we look at the items?" with no further response.
+
+**Do NOT close on "fine."** That's a starting point for probing, not an end signal.
+
+**Opt-out exists.** If Mike says at the start "skip the reflection today" or "fast-track this one," respect it — proceed directly to Step 3 with brisk dispositions. But this is an explicit *opt-out*, not a default the agent picks for him.
+
+### Captures during the check-in
+
+When Mike says something during this exchange that warrants logging (insight named explicitly, recognition stated, missed event from the period, decision made), capture it onto **the previous period's note** — yesterday for daily, last month's monthly note for monthly, last year's yearly note for yearly. The reflection is *about* that period, so it lives there as a richer record of what the period was.
+
+Use the same confirmation protocol as Step 4 Part B: present the paraphrase, ask yes/no/edit, dispatch `bujo_apply_decisions:add` only on yes. The target note is the previous period's note (e.g., `yesterday`), NOT the current-tier target (today).
+
+### Captures of forward-looking content
+
+If Mike's check-in surfaces something that's *forward-looking* (e.g., "I want to make sure I block out time for X today"), DON'T write it on yesterday — it's not about yesterday. Hold it; it'll come back up naturally in Step 5 (planning), where it lands on today's note.
+
+### Reflection that surfaces orchestrator items
+
+If Mike's check-in reflection touches items the orchestrator's `reflection_focus` already flagged, make a mental note — you'll still walk them explicitly in Step 3, but don't re-probe the same ground. Carry forward what he said.
 
 ---
 
@@ -242,7 +283,18 @@ Compose a single ordered list:
    - "Is there a pattern you're noticing?"
    - "Does this need a decision — act, hold, let go — or is it enough to just name?"
 
-4. **No feelings → accept and move on.** "Sometimes things are just what they are. Ready for the next?"
+4. **No feelings → ONE more probe before moving on.** "No feeling here" is a complete answer to a *specific question*, but it's not a license to skip the item entirely. Ask one non-feelings probe — what *did* stand out, what made it hard or easy, what would Mike do differently — then accept and move on. This is reflection's job, not feelings-forcing.
+
+### Mandatory-probe items (full tiers)
+
+Some items get a mandatory probe regardless of how Mike opened. The orchestrator flags these via `recorded_experiences` (salience signals) and the parsed lines themselves carry the others:
+
+- **Migrated 3+ times** (`>` signifier appearing on the same task across 3+ recent dailies): always probe. "What's keeping this open across N migrations?" One follow-up, then disposition.
+- **Dropped** (`dropped == True`): always probe. "What drove the drop?" Drops carry feeling more often than tasks; surface it.
+- **Insights** (`signifier == "note"` AND `prefix == "inspiration"`, rendered `!—`): always offer to expand. "Want to say more about that, or is the line itself enough?"
+- **Priority items** (`prefix == "priority"`, ✽): always probe what they meant. "How did this priority land — got attention, or got pushed?"
+
+For routine items (no salience signal, no priority prefix, completed cleanly without friction), brisk acknowledgment is fine. The point isn't to grind through every standup mention — it's to hold real depth on the items that asked for it.
 
 5. **Capture the disposition** that emerges. If the reflection already implied a disposition, confirm it conversationally (via a yes/no `AskUserQuestion`). If it's still open, use `AskUserQuestion` with the decisions below. **Set a `preview` field** on each option showing the item's full context — original text, days open, migration count — so Mike sees the full picture on hover without it cluttering the chat.
 
@@ -349,7 +401,18 @@ Setup-time ordering (events → tasks → notes) is applied by the MCP automatic
 
 ### Part B — Reflection capture (when reflection actually produced content)
 
-The interactive reflection in Steps 2 (check-in) and 3 (item review) often surfaces statements worth recording on the new period's note — insights, named patterns, recognitions, decisions. Capture those by paraphrasing Mike's own words and writing them via `bujo_apply_decisions:add` to the current-tier target. **Each capture is confirmed before writing.**
+The interactive reflection in Steps 2 (check-in) and 3 (item review) often surfaces statements worth recording. **The target depends on whether the content is about the past period or about the upcoming one** — which is the thing v0.9.3 missed.
+
+#### Two write targets, two kinds of content
+
+**Reflection on the period that just ended** → write to **the previous period's note** (the one being reflected on):
+- daily ritual → `yesterday`
+- monthly ritual → last month's monthly note (e.g., `monthly_prev` or the explicit title)
+- yearly ritual → last year's yearly note (explicit title)
+
+This is content like "I realized I was avoiding the launcher work" — it's about yesterday, so it lives on yesterday's note as a richer record of what yesterday actually was. Yesterday's note becomes the historical artifact: what was planned + what happened + what got disposed + what was learned in reflection. After the daily, yesterday's note is *complete*.
+
+**Forward-looking content** that surfaces during reflection but is really about the upcoming period → don't write here. Hold it. It'll come back up in Step 5 (planning), where it lands on the current-tier target (today). Example: "I want to make sure I block out time for X today" — that's a Step 5 priority for today's note, not a reflection capture for yesterday's note.
 
 #### What's "capturable"
 
@@ -357,25 +420,25 @@ A statement is capturable iff:
 - Mike actually said it (or its substance) during this session's Steps 2/3, in his own words. You can quote the relevant turn.
 - It has durable value beyond the moment — an insight named explicitly, a pattern Mike noticed, a recognition that landed, a decision he stated.
 
-Examples that pass the bar:
-- Insight Mike named: "Contract tests are the real proving ground" → `!— Contract tests are the real proving ground`
-- Recognition Mike named: "I keep avoiding the launcher work" → `◉ Avoiding launcher work — what's underneath?`
-- Decision Mike stated: "I need to just call someone for the dishwasher" → `• Call repair person for dishwasher`
-- Theme Mike named for the period: "This month is about getting unstuck" → `! Getting unstuck`
+Examples that pass the bar (and where they go):
+- Insight Mike named about yesterday: "Contract tests are the real proving ground" → yesterday's note as `!— Contract tests are the real proving ground`
+- Recognition stated about the period: "I keep avoiding the launcher work" → yesterday's note as `◉ Avoiding launcher work — what's underneath?`
+- Decision Mike stated *for the past period's record*: "I should have asked for help sooner" → yesterday as `!— Should have asked for help sooner`
+- Theme Mike named for the past month: "Last month was about getting unstuck" → previous monthly note as `! Getting unstuck`
 
 Examples that DO NOT pass the bar:
-- 🚫 **Inference about Mike's mood** — "Mike sounded scattered, so I'll capture `! Today: stay grounded`." He didn't say that.
+- 🚫 **Inference about Mike's mood** — "Mike sounded scattered, so I'll capture `! Yesterday: scattered energy`." He didn't say that.
 - 🚫 **Synthesis from his bullets** — "His month had a lot of test work, so the theme is `! Quality engineering`." Themes are Mike's interpretation, not yours.
 - 🚫 **Content from suggested_openers** — the orchestrator's openers are *prompts to ask*, not statements Mike made. Don't capture an opener as an insight.
 
 #### The capture exchange
 
-For each candidate (typically 0-5 items per ritual), surface the paraphrase and ask:
+For each candidate (typically 0-5 items per ritual), surface the paraphrase, name the target, and ask:
 
-> "Want me to capture this from your reflection onto today's note?
+> "Want me to add this to yesterday's note?
 > `!— Contract tests are the real proving ground`"
 
-- **Yes** → dispatch `bujo_apply_decisions:add` with that bullet.
+- **Yes** → dispatch `bujo_apply_decisions:add` with that bullet on the previous period's note (e.g., `note: "yesterday"` for daily).
 - **No / pass** → skip; don't write.
 - **Edit** → take Mike's correction and re-confirm.
 
@@ -385,10 +448,10 @@ If reflection produced nothing capturable (Mike's check-in was "fine, ready to g
 
 ### Tier-specific notes
 
-- **daily:** Part A is calendar events + Future Log surfacers. Part B captures insights/recognitions surfaced in this morning's check-in or item review (typically 0-3 items).
-- **monthly:** Part A is Future Log surfacers landing in this month. Part B captures themes Mike named for the month behind, and intentions he stated for the month ahead.
-- **yearly:** Part A is Future Log entries for the new year. Part B captures themes Mike named for the year, with the same confirmation protocol.
-- **weekly (light):** usually Part A only. Part B is uncommon — weekly skips deep reflection, so there's rarely capturable content. If Mike said something during item review worth keeping, follow the same confirm-before-write protocol.
+- **daily:** Part A scaffolds today (calendar events + Future Log surfacers). Part B writes captures to **yesterday** — yesterday is the artifact being completed.
+- **monthly:** Part A scaffolds this month (Future Log surfacers landing in this month). Part B writes captures to last month's monthly note — themes Mike named about the month that just ended.
+- **yearly:** Part A scaffolds this year (Future Log entries for the new year). Part B writes captures to last year's yearly note — themes Mike named about the year that just ended.
+- **weekly (light):** Part A only. Weekly skips deep reflection, so there's rarely capturable content. If Mike said something worth keeping during item review, follow the same confirm-before-write protocol — target is the previous week's daily where the item lived (often clearer than a "previous week" note since weekly notes don't accumulate the same way).
 
 ### Yearly-only — Future Log rollover
 
@@ -499,12 +562,14 @@ Don't narrate what you did. The note itself is the artifact.
 1. **Trust the orchestrator's plan.** Don't recompute scope. Don't re-scan for experiences. The plan is authoritative.
 2. **Every unfinished or dropped item gets inspected.** No batching. Ryder's friction principle is central to this practice — applies to all tiers including weekly.
 3. **Check-in (Step 2) is mandatory for full tiers (daily/monthly/yearly), SKIPPED for weekly.** Never skip for full tiers. Never run for weekly.
-4. **No feelings-forcing in full-tier reflection.** "No feeling here" is a complete and respected answer. Do not retry.
+4. **Probe vs. force — they're different, and probing is reflection's job.** "No feeling here" is a complete answer to a *specific feelings-question* ("How did that land?"). It is NOT a complete answer to the entire check-in or to a salient item. After "no feeling," ask one more non-feelings probe ("What did stand out?" / "What made it hard?" / "What carries forward?") before moving on. *Forcing* is insisting Mike feels something different than what he said; *probing* is asking what's underneath an answer he already gave. The ritual's job is the latter. Don't confuse them and don't use rule 4 as a license to skip depth.
 5. **No feelings probing in weekly.** Weekly is disposition-only — don't ask how an item made Mike feel. Keep the pace brisk.
 6. **No fabrication.** Mike's silence means pause. Not infer. Not assume. Pause.
 7. **🚫 Bullet content traces to Mike, not to inference.** Every intention, theme, priority, insight, recognition, or focus written via `bujo_apply_decisions:add` must trace to something Mike actually said during this session — either captured in Step 4 Part B (paraphrased reflection from Steps 2/3, with per-item confirmation) or in Step 5 (planning content from his Other-field response, with confirmation if reformatted beyond punctuation). Paraphrasing for BuJo bullet shape is allowed; synthesizing themes from his note bullets, inferring his mood into a captured statement, or composing priorities he didn't state is not. **If the reflection produced nothing capturable, that's the correct outcome — don't manufacture content to feel productive.** If Mike picks "Pass" / "Come back to this" / doesn't engage in Step 5, **zero `add` calls** for that step. Mike has previously reported the agent writing its own intentions instead of running the reflection — do not regress this.
-7. **MCP for all I/O.** No direct Apple Notes calls. No prose about formatting rules — the MCP owns them.
-8. **Schedule decisions require a future date.** If Mike says "schedule" without a date, ask for one. If the date isn't in the future, tell him the scribe will reject it and ask again.
-9. **Batch mutations per note.** One `bujo_apply_decisions` call per note per step where possible.
-10. **Tier-appropriate weight.** A daily isn't a yearly. Don't speed-run yearly like a daily, don't depth-dive daily like a yearly. Weekly is deliberately lightweight — don't turn it into a monthly.
-11. **Yearly only: Future Log rollover.** Clean stale entries during the yearly ritual — don't let the Future Log accumulate indefinitely.
+8. **🔥 Depth contract for the daily ritual (and full tiers generally).** Step 4 (scaffold) cannot run until Step 2's check-in has reached one of these end-states: (a) Mike explicitly opted out at the start ("skip reflection today" / "fast-track"), or (b) at least one of the three angles (what happened / how it landed / what carries forward) has produced a *substantive* observation — meaning more than a single dismissive word like "fine" or "good." If you find yourself about to dispatch `bujo_scaffold` and Step 2 was a one-Q-and-done exchange, stop and re-engage. The whole point of the ritual is the reflection — skipping it produces a journal that lies about what the day was. The ritual length depends on what's alive: a quick 5-minute daily on a settled day is fine; a 20-minute daily on a complicated day is fine. *Skipping* is what's broken.
+9. **Reflection captures land on the period being reflected on, not on the new period.** Daily reflection captures (insights from the check-in, recognitions from item review) write to **yesterday's note**, not today's. Today's note gets only Part A (mechanical scaffold) plus Step 5's planning content. Same pattern at every full tier — past-period reflection lives on the past-period note as a richer historical record.
+10. **MCP for all I/O.** No direct Apple Notes calls. No prose about formatting rules — the MCP owns them.
+11. **Schedule decisions require a future date.** If Mike says "schedule" without a date, ask for one. If the date isn't in the future, tell him the scribe will reject it and ask again.
+12. **Batch mutations per note.** One `bujo_apply_decisions` call per note per step where possible.
+13. **Tier-appropriate weight.** A daily isn't a yearly. Don't speed-run yearly like a daily, don't depth-dive daily like a yearly. Weekly is deliberately lightweight — don't turn it into a monthly.
+14. **Yearly only: Future Log rollover.** Clean stale entries during the yearly ritual — don't let the Future Log accumulate indefinitely.
