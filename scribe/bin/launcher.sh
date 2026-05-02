@@ -1,8 +1,15 @@
 #!/usr/bin/env bash
 #
 # scribe launcher — install bundled wheel into a stable venv on first run
-# (or version mismatch), then exec the venv binary directly. This bypasses
-# `uv run` overhead per launch (~1-3s → ~300-500ms cold start).
+# (or wheel-content change), then exec the venv binary directly. This
+# bypasses `uv run` overhead per launch (~1-3s → ~50ms cold start).
+#
+# Cache key is the wheel's SHA-256 content hash, NOT the version string.
+# This matters because `build-wheel.yml` rebuilds the wheel on every
+# scribe-source push to main — without bumping the version. A version
+# string alone would say "0.9.0 == 0.9.0, no reinstall" and silently
+# leave users running stale binaries against newer source. Hashing the
+# wheel bytes catches every real change.
 #
 # All state stays inside ${SCRIBE_DIR} so plugin uninstall is clean —
 # no launchd plists, no shared system state, no remnants outside the
@@ -19,6 +26,7 @@ SCRIBE_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 VENV_DIR="${SCRIBE_DIR}/.venv-stable"
 WHEELS_DIR="${SCRIBE_DIR}/wheels"
 RUN_DIR="${SCRIBE_DIR}/run"
+HASH_MARKER="${VENV_DIR}/.installed-wheel-hash"
 
 # Tell the scribe where to put lock files / runtime state.
 export BUJO_SCRIBE_RUN_DIR="${RUN_DIR}"
@@ -43,22 +51,24 @@ if [ -z "${WHEEL}" ]; then
   exec uv run --project "${SCRIBE_DIR}" bujo-scribe-mcp "$@"
 fi
 
-# Extract bundled wheel version from filename:
-# bujo_scribe_mcp-0.9.0-py3-none-any.whl → 0.9.0
-BUNDLED_VERSION="$(basename "${WHEEL}" \
-  | sed -E 's/^bujo_scribe_mcp-([^-]+)-py3-none-any\.whl$/\1/')"
+# Hash the wheel bytes. shasum is part of macOS base; works on Linux too.
+WHEEL_HASH="$(shasum -a 256 "${WHEEL}" | cut -d' ' -f1)"
 
-# Read installed venv version (empty if venv missing or corrupt).
-INSTALLED_VERSION=""
-if [ -x "${VENV_DIR}/bin/bujo-scribe-mcp" ]; then
-  INSTALLED_VERSION="$("${VENV_DIR}/bin/bujo-scribe-mcp" version 2>/dev/null || true)"
+# Read previously-installed wheel's hash (empty if venv missing).
+INSTALLED_HASH=""
+if [ -f "${HASH_MARKER}" ]; then
+  INSTALLED_HASH="$(cat "${HASH_MARKER}")"
 fi
 
-# (Re)install if version doesn't match. uv handles venv creation, Python
-# resolution, and dep installation in one call.
-if [ "${BUNDLED_VERSION}" != "${INSTALLED_VERSION}" ]; then
-  uv venv "${VENV_DIR}" --python ">=3.11" >/dev/null 2>&1
+# Reinstall iff the wheel's actual content has changed. Catches both
+# version bumps (different filename) and same-version mid-cycle rebuilds
+# (same filename, different bytes).
+if [ "${WHEEL_HASH}" != "${INSTALLED_HASH}" ] || [ ! -x "${VENV_DIR}/bin/bujo-scribe-mcp" ]; then
+  if [ ! -d "${VENV_DIR}" ]; then
+    uv venv "${VENV_DIR}" --python ">=3.11" >/dev/null 2>&1
+  fi
   uv pip install --python "${VENV_DIR}/bin/python" --quiet --force-reinstall "${WHEEL}"
+  echo "${WHEEL_HASH}" > "${HASH_MARKER}"
 fi
 
 # Hand off to the venv binary. exec replaces the shell so signals

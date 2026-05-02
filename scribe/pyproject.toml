@@ -1,6 +1,6 @@
 [project]
 name = "bujo-scribe-mcp"
-version = "0.9.0"
+version = "0.9.1"
 description = "MCP server for Bullet Journal ritual execution — reads/writes a notebook backend (Apple Notes today; others later) following the 📓 Journal Index rules."
 readme = "README.md"
 authors = [{ name = "Mike Bronner" }]
@@ -34,6 +34,17 @@ bujo-scribe-mcp = "bujo_scribe_mcp.__main__:main"
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+[tool.hatch.build]
+# Exclude launcher-managed runtime state from the sdist. Without these,
+# a local `uv build` after the launcher has populated `.venv-stable/`
+# blows up on the venv's absolute symlinks.
+exclude = [
+  ".venv",
+  ".venv-stable",
+  "run",
+  "wheels",
+]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/bujo_scribe_mcp"]

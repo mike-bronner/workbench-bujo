@@ -287,7 +287,13 @@ error:
 
 ## Runtime / launcher (≥0.9.0)
 
-The scribe MCP is invoked through a launcher script (`scribe/bin/launcher.sh`) rather than `uv run` directly. On first launch (or after a version bump), the launcher installs `scribe/wheels/bujo_scribe_mcp-X.Y.Z-py3-none-any.whl` into a stable venv at `scribe/.venv-stable/`, then `exec`s `scribe/.venv-stable/bin/bujo-scribe-mcp` directly. Steady-state cold start drops from ~1-3s (with `uv run`) to ~50ms.
+The scribe MCP is invoked through a launcher script (`scribe/bin/launcher.sh`) rather than `uv run` directly. On first launch (or after a wheel-content change), the launcher installs `scribe/wheels/bujo_scribe_mcp-X.Y.Z-py3-none-any.whl` into a stable venv at `scribe/.venv-stable/`, then `exec`s `scribe/.venv-stable/bin/bujo-scribe-mcp` directly. Steady-state cold start drops from ~1-3s (with `uv run`) to ~50ms.
+
+### Cache key: wheel SHA-256, not version (≥0.9.1)
+
+The launcher caches by the wheel's SHA-256 content hash, **not** by version string. The hash is recorded at `${VENV_DIR}/.installed-wheel-hash` after each install; on next launch, the launcher re-hashes the bundled wheel and reinstalls iff the hash differs.
+
+This matters because `build-wheel.yml` rebuilds the wheel on every push to `main` that touches scribe source — without bumping the version. A version-string cache key would say "0.9.1 == 0.9.1, no reinstall" and silently leave users running stale binaries against newer source. Hashing the wheel bytes catches every real change.
 
 Environment contract:
 

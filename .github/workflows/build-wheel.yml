@@ -1,0 +1,101 @@
+name: Build wheel
+
+# Rebuilds the bundled scribe wheel on every push to main that affects
+# the MCP source. Without this, the wheel only updates at release time —
+# leaving an installation window between releases where the marketplace
+# SHA pin advances to commits whose `wheels/*.whl` is older than their
+# `src/`. A user installing the plugin at one of those intermediate SHAs
+# would get the new source with the launcher pointing at a stale wheel,
+# silently running outdated code.
+#
+# This workflow keeps `wheels/` in lockstep with `src/` so every commit
+# on main has a wheel matching its source. The launcher caches by wheel
+# SHA-256 (not version), so a same-version rebuild correctly invalidates
+# every user's existing venv on next launch.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "scribe/src/**"
+      - "scribe/pyproject.toml"
+      - "scribe/uv.lock"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: build-wheel
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    # Don't loop on the workflow's own commits. GitHub also strips the
+    # default `[skip ci]` from triggering, but be explicit — release.yml
+    # bumps and rebuilds in-flight, so we don't want to double-rebuild.
+    if: ${{ !contains(github.event.head_commit.message, 'chore: rebuild wheel') && !contains(github.event.head_commit.message, '[skip ci]') }}
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Read version
+        id: version
+        run: |
+          set -euo pipefail
+          VERSION=$(grep -E '^version = ' scribe/pyproject.toml | sed -E 's/version = "([^"]+)"/\1/')
+          if [ -z "$VERSION" ]; then
+            echo "::error::Could not parse version from scribe/pyproject.toml"
+            exit 1
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Building wheel for version $VERSION"
+
+      - name: Build wheel
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          cd scribe
+          rm -f wheels/bujo_scribe_mcp-*.whl
+          uv build
+          mv "dist/bujo_scribe_mcp-${VERSION}-py3-none-any.whl" wheels/
+          rm -rf dist
+          ls -la wheels/
+
+      - name: Commit + push if wheel changed
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          SHORT_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add scribe/wheels/
+
+          # Wheel builds are not byte-deterministic by default (zip mtime,
+          # ordering). So even a no-op source change can produce a
+          # diff'd wheel. That's fine — the launcher's hash check will
+          # trigger a one-time reinstall on each user's next launch.
+          if git diff --cached --quiet; then
+            echo "No wheel diff (rare — source change didn't affect packaged output). Skipping commit."
+            exit 0
+          fi
+
+          git commit -m "chore: rebuild wheel for ${VERSION} @ ${SHORT_SHA:0:7}"
+          git push origin main
+          echo "Pushed updated wheel for ${VERSION}"
