@@ -387,15 +387,41 @@ Step 4 has two parts: **mechanical scaffold** (calendar + Future Log surfacers �
 
 ### Part A — Mechanical scaffold
 
-Dispatch `bujo_scaffold` with:
+Part A is two operations, not one:
+
+**A1. Scaffold the calendar events** via `bujo_scaffold`:
 - `target` from the Tier matrix (e.g., `today` for daily)
 - `ritual` = your tier (`daily`, `monthly`, or `yearly`)
 - `mode: merge` (creates if absent; merges if already started)
-- `sections` assembled ONLY from these mechanical sources:
+- `sections` containing ONLY:
   - **Calendar events** for the period (via DataSource backend when implemented; until then, ask Mike or skip)
-  - **Future Log items surfacing** in this period (from `bujo_read("future_log")` — match by date)
 
-**Do NOT add "migrated items" to scaffold sections.** Step 3's `migrate` decisions already appended carry-forward items via the scribe's cross-note effect.
+**A2. Surface Future Log items via migrate, NOT via scaffold sections.** Surfacing is a *move*, not a *copy* — the entry leaves the Future Log and lands on the new period's note. Use `bujo_scan` + `bujo_apply_decisions:migrate`:
+
+```
+1. bujo_scan(scope=["future_log"], filter={status: "surfaces_today"})
+   → returns items whose inline date `[YYYY-MM-DD]` matches today AND
+     whose signifier is open or scheduled (resolved entries are
+     excluded by the scan, see ≥0.9.5 filter behavior).
+
+2. For each item, dispatch on the Future Log:
+   bujo_apply_decisions(
+     note: "future_log",
+     decisions: [
+       { op: "migrate", bullet: <scan_item.text>, target: "today" }
+     ]
+   )
+```
+
+The migrate's effect:
+- **Future Log source** → signifier becomes `>` (migrated). The entry stays on the Future Log as historical record but won't surface again on subsequent days (the post-0.9.5 scan filter excludes migrated lines from `surfaces_today`).
+- **Today's note** → fresh task line appended with the same text (including the `[YYYY-MM-DD]` date prefix as provenance).
+
+Also surface **overdue** Future Log items the same way: `bujo_scan(scope=["future_log"], filter={status: "overdue"})` → migrate each. These are entries whose date passed but were never migrated (e.g., the daily ritual was skipped on that date).
+
+**Why migrate, not scaffold-add:** scaffold writes to today only. It has no mechanism to mark the Future Log entry as resolved, so the same entry would surface every morning forever. Mike has previously reported exactly this bug — Future Log items getting copied to today but never removed. The migrate op is what closes the loop atomically.
+
+**Do NOT add "migrated items" to scaffold sections.** Step 3's `migrate` decisions already appended carry-forward items via the scribe's cross-note effect. Same applies to A2's Future Log surfacers — the migrate op handles target append on its own.
 
 Setup-time ordering (events → tasks → notes) is applied by the MCP automatically. Don't pre-sort.
 

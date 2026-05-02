@@ -90,6 +90,22 @@ def _passes_filter(line: BujoLine, f, *, reference_date: date, rules=None) -> bo
         terminal = _TERMINAL_SIGS
         return line.signifier not in terminal and not line.dropped
 
+    # Date-based filters (`due_today`, `surfaces_today`, `overdue`) exclude
+    # already-resolved lines: migrated, completed, dropped. Without this
+    # exclusion, the daily ritual's Future Log surface step picks up the
+    # same entry every morning forever — once migrated, the entry stays on
+    # the Future Log as `>` but its inline date still matches the filter,
+    # so it surfaces again, gets migrated again, and pollutes today's note
+    # with duplicates.
+    #
+    # `scheduled` (`<`) is INCLUDED — that's the entire point of the
+    # Future Log's scheduled-then-surface lifecycle. A scheduled entry on
+    # its date IS what surfaces_today is asking about.
+    if line.dropped:
+        return False
+    if line.signifier in {"completed", "migrated"}:
+        return False
+
     inline_date = _inline_date(line)
     if f.status == "due_today" or f.status == "surfaces_today":
         return inline_date == reference_date

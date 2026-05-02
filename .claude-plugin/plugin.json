@@ -1,7 +1,7 @@
 {
   "name": "workbench-bujo",
   "description": "BuJo ritual system: daily, weekly, monthly, and yearly interactive reflections in Apple Notes. Scheduled rituals with on-demand slash commands.",
-  "version": "0.9.4",
+  "version": "0.9.5",
   "author": {
     "name": "Mike Bronner",
     "url": "https://github.com/mike-bronner"

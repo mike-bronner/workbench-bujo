@@ -210,6 +210,13 @@ items:
   with `signifier: "unrecognized"`. The `text`/`anchor` is the de-tagged
   HTML of the div, which round-trips into `apply_decisions:remove` for
   legacy/malformed cleanup. The `type` filter is ignored in this mode.
+- `status: "due_today"` / `"surfaces_today"` / `"overdue"` (≥0.9.5) match
+  by inline `[YYYY-MM-DD]` date, AND additionally exclude lines whose
+  signifier is `migrated` or `completed`, or whose `dropped` flag is
+  true. `scheduled` (`<`) is INCLUDED — that's the entire point of the
+  Future Log's scheduled-then-surface lifecycle. Without this exclusion,
+  the daily Future Log surfacing step picks up the same migrated entry
+  every morning forever.
 
 ---
 
