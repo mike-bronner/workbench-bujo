@@ -113,10 +113,45 @@ class ReadInput(BaseModel):
     notes: list[str] = Field(description="Canonical slugs or explicit note titles.")
 
 
+class ParsedLine(BaseModel):
+    """A single semantic BuJo line as it appears on a note.
+
+    The wire-side projection of the internal `parsing.BujoLine` — the raw
+    HTML form is intentionally NOT exposed. Callers reason over signifier,
+    prefix, text, depth, dropped, and anchor only. `anchor` round-trips
+    back into `apply_decisions` as the `bullet` field.
+    """
+
+    signifier: Signifier = Field(
+        description=(
+            "Built-in key (task | event | note | completed | migrated | "
+            "scheduled | sub_item) or a user-defined extension key."
+        )
+    )
+    prefix: Prefix | None = Field(
+        default=None,
+        description="priority | inspiration | explore, or a user-defined extension key.",
+    )
+    text: str
+    depth: int = Field(default=0, description="0 = top-level, 1+ = nested sub-item.")
+    dropped: bool = Field(default=False, description="True iff line is wrapped in <s>…</s>.")
+    anchor: str = Field(
+        description="Stable identifier — pass back as `bullet` in apply_decisions."
+    )
+
+
 class NoteContent(BaseModel):
     title: str
     exists: bool
-    content: str | None
+    lines: list[ParsedLine] | None = Field(
+        default=None,
+        description=(
+            "Parsed BuJo lines from the note body. None when exists=False. "
+            "Blank lines and unrecognized (non-BuJo) divs are filtered out — "
+            "use bujo_scan with status='unrecognized' to surface non-BuJo "
+            "content for maintenance."
+        ),
+    )
     retrieved_at: str
 
 
@@ -278,7 +313,7 @@ class ApplyDecisionsOutput(BaseModel):
 # ---------------------------------------------------------------------------
 
 class ScanFilter(BaseModel):
-    status: Literal["open", "due_today", "overdue", "surfaces_today"] | None = None
+    status: Literal["open", "due_today", "overdue", "surfaces_today", "unrecognized"] | None = None
     type: Literal["task", "event", "note"] | None = None
     date: str | None = None  # YYYY-MM-DD, defaults to today
 

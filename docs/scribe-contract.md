@@ -58,14 +58,24 @@ packet:
   <identifier>:
     title: "<actual note title>"
     exists: true | false
-    content: "<raw note body>" | null
+    lines:                          # parsed BuJo lines; null when exists=false
+      - signifier: task | event | note | completed | migrated | scheduled | sub_item | <ext>
+        prefix: priority | inspiration | explore | <ext> | null
+        text: "..."
+        depth: 0                    # 0 = top-level, 1+ = nested sub-item
+        dropped: true | false       # true iff wrapped in <s>…</s>
+        anchor: "<stable bullet reference for apply-decisions>"
     retrieved_at: "<ISO timestamp>"
 ```
 
 **Behavior:**
 - Always implicitly reads `index` (adds it to packet if not requested).
 - Parallel fetches where the MCP permits.
-- Missing notes return `exists: false, content: null` — not an error.
+- Missing notes return `exists: false, lines: null` — not an error.
+- Raw HTML never crosses the wire. The body is parsed via the scribe's parser
+  and only `BujoLine` entries are emitted; blank rows and unrecognized
+  (non-BuJo) divs are filtered out. To surface unrecognized content for
+  maintenance, use `scribe.scan` with `filter.status: "unrecognized"`.
 
 ---
 
@@ -169,14 +179,14 @@ cross_note_effects:                     # e.g. migrate writes to target too
 
 ### 4. `scribe.scan`
 
-**Purpose:** find open or due items across notes. Read-only.
+**Purpose:** find items across notes by status. Read-only.
 
 **Input:**
 ```yaml
 scope: [<identifier>, ...]
 filter:
-  status: open | due_today | overdue | surfaces_today
-  type: task | event | note           # optional
+  status: open | due_today | overdue | surfaces_today | unrecognized
+  type: task | event | note           # optional; ignored when status=unrecognized
   date: "YYYY-MM-DD"                  # optional, defaults today
 ```
 
@@ -185,7 +195,7 @@ filter:
 items:
   - note: "<title>"
     section: "<section name>"
-    signifier: task | event | note
+    signifier: task | event | note | unrecognized
     text: "..."
     anchor: "<stable reference for apply-decisions>"
     due: "YYYY-MM-DD" | null
@@ -195,6 +205,10 @@ items:
 - Read-only.
 - Uses index rules to classify what "open" means.
 - `anchor` is a string Hobbes can pass back in a subsequent `apply-decisions` as the `bullet` field — stable across re-reads.
+- `status: "unrecognized"` returns every non-BuJo div in scope as a ScanItem
+  with `signifier: "unrecognized"`. The `text`/`anchor` is the de-tagged
+  HTML of the div, which round-trips into `apply_decisions:remove` for
+  legacy/malformed cleanup. The `type` filter is ignored in this mode.
 
 ---
 

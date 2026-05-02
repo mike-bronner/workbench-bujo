@@ -152,10 +152,10 @@ reflection_focus:
 
 All I/O goes through `mcp__plugin_workbench-bujo_scribe__*`. Never call Apple Notes directly.
 
-- `bujo_read` — fetch note content (scope_notes + current-tier target)
+- `bujo_read` — fetch parsed `lines[]` for each note (scope_notes + current-tier target)
 - `bujo_scaffold` — create/merge the current-tier target
-- `bujo_apply_decisions` — mutate any note (complete, migrate, schedule, drop, add, update, reorder)
-- `bujo_scan` — find open items for review
+- `bujo_apply_decisions` — mutate any note (complete, migrate, schedule, drop, add, update, reorder, remove)
+- `bujo_scan` — find items by status: `open`, `due_today`, `overdue`, `surfaces_today`, or `unrecognized`. Use `unrecognized` to surface non-BuJo legacy/malformed content for `apply_decisions:remove` cleanup; the returned `text`/`anchor` round-trips into the remove op.
 - `bujo_summarize` — optional summary block
 
 Signifier formatting, HTML quirks, NBSP handling, signifier extension resolution — all live inside the MCP. Don't narrate rules here; dispatch the verb.
@@ -169,7 +169,15 @@ Signifier formatting, HTML quirks, NBSP handling, signifier extension resolution
 - the current-tier **target** from the Tier matrix (to see what's already been scaffolded, if anything)
 - `"future_log"` (for reference during disposition/scheduling)
 
-Skim the returned content. Keep it available as you run the rest of the ritual.
+Each note in the returned `packet` carries `lines: ParsedLine[]` — structured `{signifier, prefix, text, depth, dropped, anchor}` entries. **There is no raw HTML in the response, by design.** Blank rows and non-BuJo divs are filtered server-side.
+
+### 🛑 Ground every claim on `lines[]`
+
+When the orchestrator's `recorded_experiences` references an item, verify its `item` text appears verbatim in the corresponding note's `lines[].text` before quoting it back to Mike. If it doesn't match, treat the orchestrator entry as stale and skip it — never paper over the gap by reciting from memory or by composing items that "should be there." The journal is the source of truth; if it isn't in `lines[]`, it doesn't exist.
+
+This rule applies everywhere in the ritual — never claim an item, count, or status that you can't point to in `lines[]` (or in `bujo_scan` output for Step 3).
+
+Keep the parsed lines available as you run the rest of the ritual.
 
 ## Step 2 — Check-in + capture missing (INTERACTIVE — full tiers only)
 
@@ -208,7 +216,7 @@ If Mike's check-in reflection surfaces items that the orchestrator's `reflection
 ### Inputs for this step
 
 - Open items from scope: `bujo_scan(scope=scope_notes, filter={status: open})` — returns every non-terminal bullet
-- Dropped items from scope: scan the scope notes for `<s>…</s>` strikethrough entries
+- Dropped items from scope: filter `bujo_read(scope_notes)` packet's `lines[]` to entries with `dropped == True` — never grep raw HTML
 - Orchestrator's `reflection_focus.{tier}.recorded_experiences` + `potential_gaps` — overlays salience signals and openers
 
 Compose a single ordered list:

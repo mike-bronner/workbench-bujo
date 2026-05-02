@@ -1,7 +1,7 @@
-"""bujo.scan — find open or due items across notes.
+"""bujo.scan — find open, due, or unrecognized items across notes.
 
 Read-only. Resolves each scope identifier, fetches the note, parses, and
-returns every BujoLine that passes the requested filter. Stable `anchor`
+returns every line that passes the requested filter. Stable `anchor`
 fields let callers pass the items back into `bujo.apply_decisions` as
 bullet targets.
 
@@ -11,21 +11,27 @@ Status definitions:
 - `due_today`       item's inline date tag == today (e.g. Future Log `[YYYY-MM-DD]`)
 - `overdue`         item's inline date tag < today
 - `surfaces_today`  alias for `due_today` — semantic sugar for Future Log sweeps
+- `unrecognized`    surfaces every UnrecognizedLine — non-BuJo content (legacy
+                    or malformed divs). Returned as ScanItem with
+                    signifier='unrecognized'; the `text`/`anchor` is the
+                    de-tagged HTML which round-trips to apply_decisions:remove.
 """
 
 from __future__ import annotations
 
+import html as _html
 import re
 from datetime import date, datetime
 from zoneinfo import ZoneInfo
 
 from bujo_scribe_mcp.backends.base import BackendError
 from bujo_scribe_mcp.context import Context
-from bujo_scribe_mcp.parsing import BujoLine, parse_note
+from bujo_scribe_mcp.parsing import BujoLine, UnrecognizedLine, parse_note
 from bujo_scribe_mcp.resolver import resolve
 from bujo_scribe_mcp.schemas import ScanInput, ScanItem, ScanOutput
 
 _INLINE_DATE_RE = re.compile(r"\[(\d{4}-\d{2}-\d{2})\]")
+_TAG_RE = re.compile(r"<[^>]+>")
 
 
 def execute(input: ScanInput, *, ctx: Context) -> ScanOutput:
@@ -42,6 +48,12 @@ def execute(input: ScanInput, *, ctx: Context) -> ScanOutput:
         except BackendError:
             continue
         parsed = parse_note(note.content, rules=ctx.rules)
+
+        if input.filter.status == "unrecognized":
+            for line in parsed.lines:
+                if isinstance(line, UnrecognizedLine):
+                    items.append(_to_unrecognized_item(ref.title, line))
+            continue
 
         for line in parsed.lines:
             if not isinstance(line, BujoLine):
@@ -111,6 +123,23 @@ def _to_scan_item(note_title: str, line: BujoLine) -> ScanItem:
         text=line.text,
         anchor=line.anchor,
         due=inline.isoformat() if inline else None,
+    )
+
+
+def _to_unrecognized_item(note_title: str, line: UnrecognizedLine) -> ScanItem:
+    """Project an UnrecognizedLine into a ScanItem suitable for hygiene flows.
+
+    `text` and `anchor` carry the de-tagged HTML — that's what
+    `apply_decisions:remove` substring-matches against on UnrecognizedLine.
+    """
+    stripped = _TAG_RE.sub("", _html.unescape(line.raw_html)).strip()
+    return ScanItem(
+        note=note_title,
+        section="",
+        signifier="unrecognized",
+        text=stripped,
+        anchor=stripped,
+        due=None,
     )
 
 
