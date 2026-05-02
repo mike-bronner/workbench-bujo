@@ -82,26 +82,44 @@ Then dispatch the add.
 
 ## Interaction pattern
 
-**Auto-dispatch (default for unambiguous moments):** when the trigger is unambiguous (see the SessionStart hook's "Auto-capture" list — concrete completions, named decisions, voiced insights, real-world events, agent-completed work that produced an artifact), **dispatch without asking**. Confirm with one line:
+**Proactive (always via `AskUserQuestion`, yes/no):** when Hobbes notices something potentially capture-worthy, propose it via `AskUserQuestion` with the proposed bullet text in the question and TWO options only — yes or no:
 
-> "🪶 Logged: `!— Architecture shift: MCP owns invariants, skills get drifty`"
+```jsonc
+AskUserQuestion({
+  questions: [{
+    question: "🪶 Capture this on today's note?\n  `!— Architecture shift: MCP owns invariants, skills get drifty`",
+    header: "Capture?",
+    multiSelect: false,
+    options: [
+      { label: "Yes — log it", description: "Adds the bullet to today's note" },
+      { label: "No — skip",    description: "Not capture-worthy" }
+    ]
+  }]
+})
+```
 
-The whole point of mid-conversation capture is that it shouldn't add friction. Each "should I capture this?" prompt at an unambiguous moment is a tax on Mike's flow — the journal is supposed to *follow* his work, not interrupt it.
+On **Yes** → dispatch the `bujo_apply_decisions:add` (or `:schedule` for future-dated). Confirm with one line: *"🪶 Logged."*
+On **No** → skip silently. Don't paraphrase and re-offer the same moment.
 
-**Ask-first (only for ambiguous moments):** when it's not clear whether something lands as capture-worthy (a pivot that might be exploration, a frustration without clear stakes, a thinking-aloud moment), offer one line:
+**No silent auto-capture.** Even unambiguous moments (just shipped a release, named a clear decision) go through this prompt. Triage is the agent's job; the decision to log is Mike's. The journal stays sparse because every entry is actively chosen.
 
-> "🪶 Worth capturing: `! Pivot: ...`?"
+**No "edit wording" option.** The wording in the question IS what lands on yes. If the wording is wrong, Mike says no and the agent does better next time (or runs `/bujo-capture <correct text>` manually). A three-button prompt becomes a small editing exercise; two buttons keep the friction low.
 
-One offer, then drop it if Mike doesn't engage. Don't pile up.
+**Manual via slash command:** Mike invokes `/workbench-bujo:bujo-capture <text>` directly. Dispatch without asking — he already decided.
 
-**Manual via slash command:** Mike invokes `/workbench-bujo:bujo-capture` with content. Dispatch without asking — he already decided.
+### Self-throttle on consecutive rejections
+
+If Mike says **No** to **3+ consecutive proposals** in a session, the agent's threshold is too eager for this moment. **Stop proposing for the rest of the session** and acknowledge once: *"Got it — I'll stop proposing captures this session. Run `/bujo-capture <text>` if something specific comes up."*
+
+The user's "no, no, no" is a clear signal that the conversation is in flow that doesn't need narration. Resume proposals next session.
 
 ## Hard rules
 
 1. **Signal-to-noise ratio is sacred.** Over-capturing makes the journal useless. Under-capture if uncertain.
 2. **Single line.** Multi-line captures belong in a ritual reflection, not mid-conversation.
 3. **Mike's voice, not yours.** Write the capture as a neutral observation or in Mike's words. Never editorialize or add your own interpretation.
-4. **Auto-dispatch unambiguous captures; ask-first only for ambiguous ones.** The hook's "Auto-capture" list defines which category each trigger falls into. Confirming a clear capture wastes Mike's attention; skipping a confirmation on an ambiguous one risks a bad write. Use judgment per the hook categories — don't treat every capture as needing confirmation, and don't skip confirmation when the moment isn't crystal clear.
-5. **Never capture private/embarrassing content** that Mike wouldn't want in a note he might re-read. If a moment is raw, ask first regardless of whether it'd otherwise auto-dispatch.
+4. **Always propose via `AskUserQuestion` with yes/no.** No silent auto-dispatch (even for "obvious" moments). No edit-wording option (yes/no only). No retrying after a no on the same moment. Manual `/bujo-capture` is the only path that dispatches without proposing.
+5. **Never capture private/embarrassing content** without asking — and even ask-and-yes shouldn't go in if the moment is raw.
 6. **Respect the day's scaffold.** If today isn't scaffolded yet, scaffold a minimal one; don't refuse to capture.
 7. **Setup-time ordering does not apply to captures.** Mid-day additions append chronologically — the MCP's `mode: merge` handles that correctly.
+8. **Self-throttle after 3 consecutive nos.** Stop proposing for the session.
