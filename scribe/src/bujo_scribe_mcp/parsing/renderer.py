@@ -19,7 +19,9 @@ import html
 
 from bujo_scribe_mcp.parsing.model import (
     BlankLine,
+    BodyLine,
     BujoLine,
+    HeadingLine,
     Line,
     ParsedNote,
     UnrecognizedLine,
@@ -56,9 +58,31 @@ def _render_line(line: Line, rules: Rules) -> str:
         return rules.backends.apple_notes.html.blank_line
     if isinstance(line, UnrecognizedLine):
         return line.raw_html
+    if isinstance(line, HeadingLine):
+        return _render_heading(line)
+    if isinstance(line, BodyLine):
+        # Body content carries arbitrary inline styling (italic, bold,
+        # mixed, embedded fonts/emoji); we round-trip the raw_html
+        # exactly. The model never reconstructs body HTML from
+        # plain-text — see model.py for rationale.
+        return line.raw_html
     if isinstance(line, BujoLine):
         return _render_bujo(line, rules)
     raise TypeError(f"Unknown line type: {type(line).__name__}")
+
+
+def _render_heading(line: HeadingLine) -> str:
+    """Emit the Apple Notes-native heading form: <div><b><h{n}>text</h{n}></b><h{n}><br></h{n}></div>.
+
+    `level` matches the HTML h-tag number directly: 2 for Heading, 3 for
+    Subheading. The note title (h1) is rendered separately via
+    _render_title; HeadingLine should not carry level=1.
+    """
+    if line.level not in (2, 3):
+        raise ValueError(f"HeadingLine.level must be 2 or 3, got {line.level}")
+    n = line.level
+    text = html.escape(line.text)
+    return f"<div><b><h{n}>{text}</h{n}></b><h{n}><br></h{n}></div>"
 
 
 def _render_bujo(line: BujoLine, rules: Rules) -> str:

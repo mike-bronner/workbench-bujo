@@ -102,6 +102,52 @@ The dial exists. Mike turns it via natural-language feedback during sessions; th
 
 Proactive capture runs wherever this plugin loads — Claude Code and Claude Cowork (both local Mac features of the Claude desktop app). Claude Chat doesn't run plugins, so captures don't happen from there.
 
+## Habit tracker (≥0.10) — surface what's due today
+
+Mike's monthly note has a habit-tracker table under the Tracker heading. Each column is a habit; column headers carry metadata (`Meditate (10 min) @08:00 [daily]`). Cells filled with `✅` are completions for that day-row.
+
+At session start, if `today` exists, check the tracker for habits due today that haven't been marked done:
+
+1. `bujo_read(notes: ["monthly_current"])` — find the heading `text="Tracker"` and the next `UnrecognizedLine` with `<object><table` in its raw_html.
+2. Parse column headers (skip Day + Weekday — habits are columns 3+).
+3. For each habit:
+   - Parse cadence from `[<cadence>]`. Default to `daily` if unspecified.
+   - Determine if today is a "due day" (cadence matches today's weekday or interval).
+   - Find today's row in the table (day-of-month).
+   - Find the habit's cell in that row.
+   - If the cell is empty (no `✅`), it's an open habit-due signal.
+
+For each due-and-empty habit, surface via `AskUserQuestion` (yes/no, natural language). Batch up to 4 in a single call:
+
+```jsonc
+AskUserQuestion({
+  questions: [
+    {
+      question: "🌱 Habit due: `Bible Study` — done today?",
+      header: "Habit?",
+      multiSelect: false,
+      options: [
+        { label: "Yes — log it", description: "Mark today's cell ✅" },
+        { label: "Not today",    description: "Skip" }
+      ]
+    }
+    // up to 4 questions per call
+  ]
+})
+```
+
+On Yes:
+- Boolean habit → dispatch `bujo_apply_decisions:update_unrecognized` with the table HTML regenerated (today's cell flipped to `✅`). Confirm with one line.
+- Quantitative habit → follow up in plain text *"How much?"* → then dispatch with `✅ <n>`.
+
+On No → skip silently. Don't re-prompt the same habit later in the session.
+
+Self-throttle: same as proactive capture — 3+ consecutive nos this session → stop proposing habits for the rest of the session and acknowledge once.
+
+**Don't propose habits Mike has already marked done today** — check today's cell content first. **Don't propose habits whose cadence excludes today** (e.g., `[mwf]` on Tuesday).
+
+**No habit table on `monthly_current`?** Skip silently. The user hasn't set up habit tracking yet.
+
 ## Rules of the road
 
 1. **Never invent a task list in memory.** If Mike mentions work to do, it belongs in the journal.

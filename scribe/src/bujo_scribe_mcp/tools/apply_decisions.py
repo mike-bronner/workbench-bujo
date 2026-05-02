@@ -35,6 +35,7 @@ from bujo_scribe_mcp.schemas import (
     DecisionSchedule,
     DecisionUndrop,
     DecisionUpdate,
+    DecisionUpdateUnrecognized,
     Diff,
     DiffAdded,
     DiffChanged,
@@ -55,6 +56,7 @@ from bujo_scribe_mcp.tools._mutations import (
     apply_schedule,
     apply_undrop,
     apply_update,
+    apply_update_unrecognized,
 )
 
 
@@ -163,6 +165,9 @@ def _dispatch(
         return diffs, reason, None
     if isinstance(decision, DecisionRemove):
         diffs, reason = apply_remove(parsed, decision, ctx.rules)
+        return diffs, reason, None
+    if isinstance(decision, DecisionUpdateUnrecognized):
+        diffs, reason = apply_update_unrecognized(parsed, decision, ctx.rules)
         return diffs, reason, None
     if isinstance(decision, DecisionMigrate):
         return apply_migrate(parsed, decision, ctx.rules)

@@ -5,9 +5,11 @@ Resolves every identifier (slug or explicit title) to a concrete title via
 body into structured `ParsedLine` entries. Missing notes come back with
 `exists=False, lines=None` — never an error.
 
-Only `BujoLine` entries cross the wire — blank rows and unrecognized
-(non-BuJo) divs are filtered. To surface unrecognized content for
-maintenance, callers use `bujo_scan` with `status="unrecognized"`.
+Lines exposed on the wire (post-0.10): BuJo bullets (`kind="bujo"`),
+Headings/Subheadings (`kind="heading"`), and Body paragraphs
+(`kind="body"`). Blank rows and `UnrecognizedLine` (tables, etc.) are
+filtered — use `bujo_scan` with `status="unrecognized"` to surface
+non-structured content.
 """
 
 from __future__ import annotations
@@ -16,7 +18,7 @@ from datetime import datetime, timezone
 
 from bujo_scribe_mcp.backends.base import BackendError
 from bujo_scribe_mcp.context import Context
-from bujo_scribe_mcp.parsing import BujoLine, parse_note
+from bujo_scribe_mcp.parsing import BodyLine, BujoLine, HeadingLine, parse_note
 from bujo_scribe_mcp.resolver import ResolverError, resolve
 from bujo_scribe_mcp.schemas import NoteContent, ParsedLine, ReadInput, ReadOutput
 
@@ -56,7 +58,11 @@ def _read_one(identifier: str, *, ctx: Context) -> NoteContent:
         )
 
     parsed = parse_note(note.content, rules=ctx.rules)
-    lines = [_to_parsed_line(line) for line in parsed.lines if isinstance(line, BujoLine)]
+    lines: list[ParsedLine] = []
+    for line in parsed.lines:
+        wire = _to_parsed_line(line)
+        if wire is not None:
+            lines.append(wire)
 
     return NoteContent(
         title=ref.title,
@@ -66,15 +72,33 @@ def _read_one(identifier: str, *, ctx: Context) -> NoteContent:
     )
 
 
-def _to_parsed_line(line: BujoLine) -> ParsedLine:
-    return ParsedLine(
-        signifier=line.signifier,
-        prefix=line.prefix,
-        text=line.text,
-        depth=line.depth,
-        dropped=line.dropped,
-        anchor=line.anchor,
-    )
+def _to_parsed_line(line) -> ParsedLine | None:
+    """Project an internal Line to its wire-side ParsedLine, or None to filter."""
+    if isinstance(line, BujoLine):
+        return ParsedLine(
+            kind="bujo",
+            text=line.text,
+            anchor=line.anchor,
+            signifier=line.signifier,
+            prefix=line.prefix,
+            depth=line.depth,
+            dropped=line.dropped,
+        )
+    if isinstance(line, HeadingLine):
+        return ParsedLine(
+            kind="heading",
+            text=line.text,
+            anchor=line.text,
+            heading_level=line.level,
+        )
+    if isinstance(line, BodyLine):
+        return ParsedLine(
+            kind="body",
+            text=line.text,
+            anchor=line.text,
+        )
+    # BlankLine and UnrecognizedLine are filtered out.
+    return None
 
 
 def _missing(identifier: str, *, detail: str) -> NoteContent:

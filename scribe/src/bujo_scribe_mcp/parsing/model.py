@@ -55,17 +55,50 @@ class BlankLine:
 
 
 @dataclass
+class HeadingLine:
+    """An Apple Notes Heading or Subheading paragraph.
+
+    `level` matches the HTML h-tag number directly:
+    - 2 → Heading (h2 / legacy 18px-span)
+    - 3 → Subheading (h3 / legacy 16px-span)
+
+    The note title (h1 / legacy 24px-span) is NOT a HeadingLine — it's
+    extracted into `ParsedNote.title` via the title-detection path.
+    """
+
+    text: str
+    level: int
+    raw_html: str = ""
+
+
+@dataclass
+class BodyLine:
+    """A non-heading, non-mono paragraph.
+
+    Body lines can carry any inline styling (italic, bold, embedded
+    fonts/emoji, mixed). We preserve the original HTML and expose a
+    de-tagged plain-text view for matching/display — we do NOT model
+    individual style flags because the styling space is too varied to
+    flatten without losing fidelity.
+    """
+
+    text: str        # de-tagged plain-text view (for search/display)
+    raw_html: str    # canonical full HTML for round-trip rendering
+
+
+@dataclass
 class UnrecognizedLine:
-    """A div whose content didn't parse as a BuJo line.
+    """A div whose content didn't parse as a known line type.
 
     Preserved verbatim so we can round-trip it through renderer without
-    mutating content we don't understand.
+    mutating content we don't understand. Tables (which can't be cleanly
+    represented as a structured line) live here.
     """
 
     raw_html: str
 
 
-Line = BujoLine | BlankLine | UnrecognizedLine
+Line = BujoLine | BlankLine | HeadingLine | BodyLine | UnrecognizedLine
 
 
 @dataclass

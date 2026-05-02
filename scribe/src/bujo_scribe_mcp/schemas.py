@@ -114,29 +114,59 @@ class ReadInput(BaseModel):
 
 
 class ParsedLine(BaseModel):
-    """A single semantic BuJo line as it appears on a note.
+    """A single semantic line as it appears on a note.
 
-    The wire-side projection of the internal `parsing.BujoLine` — the raw
-    HTML form is intentionally NOT exposed. Callers reason over signifier,
-    prefix, text, depth, dropped, and anchor only. `anchor` round-trips
-    back into `apply_decisions` as the `bullet` field.
+    The wire-side projection of the internal parsing line types
+    (`BujoLine`, `HeadingLine`, `BodyLine`) — raw HTML is intentionally
+    NOT exposed. Callers discriminate on `kind`:
+
+    - `kind="bujo"` — a BuJo bullet. signifier/prefix/depth/dropped/text
+      are populated. `anchor` round-trips back into `apply_decisions` as
+      the `bullet` field.
+    - `kind="heading"` — an Apple Notes Heading or Subheading.
+      `heading_level` is 2 (Heading) or 3 (Subheading). text/anchor
+      carry the heading text.
+    - `kind="body"` — a paragraph that's neither bullet nor heading.
+      Body lines preserve arbitrary inline styling on the note (italic,
+      bold, mixed); `text` is the de-tagged plain-text view. We don't
+      expose `raw_html` here — agents don't reconstruct body HTML.
+
+    `BlankLine` and `UnrecognizedLine` (tables, etc.) are filtered out
+    of `lines[]` per v0.8.0 behavior. Use `bujo_scan` with
+    `status="unrecognized"` to surface non-structured content.
     """
 
-    signifier: Signifier = Field(
+    kind: Literal["bujo", "heading", "body"] = Field(
+        default="bujo",
+        description="Discriminator for the line variant.",
+    )
+    text: str = Field(description="Plain-text content of the line.")
+    anchor: str = Field(
         description=(
-            "Built-in key (task | event | note | completed | migrated | "
-            "scheduled | sub_item) or a user-defined extension key."
+            "Stable identifier. For bujo lines: the bullet anchor (pass "
+            "back as `bullet` in apply_decisions). For heading/body: the "
+            "de-tagged text (used for substring matching / lookup)."
         )
+    )
+    # bujo-only fields
+    signifier: Signifier | None = Field(
+        default=None,
+        description=(
+            "BuJo lines only. Built-in key (task | event | note | "
+            "completed | migrated | scheduled | sub_item) or a "
+            "user-defined extension key."
+        ),
     )
     prefix: Prefix | None = Field(
         default=None,
-        description="priority | inspiration | explore, or a user-defined extension key.",
+        description="BuJo lines only. priority | inspiration | explore, or a user-defined extension key.",
     )
-    text: str
-    depth: int = Field(default=0, description="0 = top-level, 1+ = nested sub-item.")
-    dropped: bool = Field(default=False, description="True iff line is wrapped in <s>…</s>.")
-    anchor: str = Field(
-        description="Stable identifier — pass back as `bullet` in apply_decisions."
+    depth: int = Field(default=0, description="BuJo lines only. 0 = top-level, 1+ = nested sub-item.")
+    dropped: bool = Field(default=False, description="BuJo lines only. True iff line is wrapped in <s>…</s>.")
+    # heading-only fields
+    heading_level: int | None = Field(
+        default=None,
+        description="Heading lines only. 2 = Heading (h2), 3 = Subheading (h3).",
     )
 
 
@@ -271,6 +301,29 @@ class DecisionCombine(BaseModel):
     parent_bullet: str
 
 
+class DecisionUpdateUnrecognized(BaseModel):
+    """Replace an UnrecognizedLine's raw_html in place — added in 0.10.0.
+
+    UnrecognizedLine carries the raw HTML for content the parser
+    couldn't classify into a structured line type (typically tables and
+    other `<object>`-wrapped content). The standard `update` op operates
+    on `BujoLine.text`, so it can't mutate tables. This op gives a
+    structured update path for the table itself.
+
+    Matches by `anchor`: a substring that must appear within the target
+    line's `raw_html`. Use a unique substring (e.g., `<object><table` for
+    a habit-tracker table). Ambiguous matches → AMBIGUOUS_BULLET. Missing
+    → NOT_FOUND.
+
+    Use case: the habit tracker on the monthly note. The agent reads the
+    table via `bujo_read`, regenerates the full table HTML with cell
+    updates applied, and dispatches this op to write the new HTML back."""
+
+    op: Literal["update_unrecognized"]
+    anchor: str
+    new_html: str
+
+
 Decision = (
     DecisionComplete
     | DecisionMigrate
@@ -282,6 +335,7 @@ Decision = (
     | DecisionReorder
     | DecisionRemove
     | DecisionCombine
+    | DecisionUpdateUnrecognized
 )
 
 

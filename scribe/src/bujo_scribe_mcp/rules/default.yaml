@@ -120,11 +120,19 @@ backends:
     folder: "📓 Journal"
     index_note_title: "📓 Journal Index"
     html:
-      monospace_wrapper: '<div><font face="Menlo-Regular"><tt>{content}</tt></font></div>'
+      # Apple Notes' native Monospaced paragraph style emits plain
+      # `<div><tt>...</tt></div>` (no <font> wrapper). Older Apple Notes
+      # builds and pre-0.10 scribe wrote `<font face="Menlo-Regular">`
+      # around the <tt>; the parser still accepts that legacy form for
+      # backward compat with existing notes, but new writes use native.
+      monospace_wrapper: '<div><tt>{content}</tt></div>'
       blank_line: "<div><br></div>"
       nbsp_encoding: "&nbsp;"
       strikethrough_open: "<s>"
       strikethrough_close: "</s>"
-      title_open: '<div><b><span style="font-size: 24px">'
-      title_close: '</span></b><br></div>'
+      # Apple Notes' native Title paragraph style uses <h1>. Pre-0.10
+      # scribe emitted <span style="font-size: 24px"> — parser accepts
+      # both forms, renderer emits native h1.
+      title_open: '<div><b><h1>'
+      title_close: '</h1></b><h1><br></h1></div>'
       heading_h2_size_px: 18

@@ -21,7 +21,9 @@ from bujo_scribe_mcp.parsing.model import (
     BASE_CHAR_TO_KEY,
     PREFIX_CHAR_TO_KEY,
     BlankLine,
+    BodyLine,
     BujoLine,
+    HeadingLine,
     Line,
     ParsedNote,
     UnrecognizedLine,
@@ -45,24 +47,51 @@ NBSP = "\u00a0"
 # newlines inside a div.
 _DIV_RE = re.compile(r"<div\b[^>]*>(.*?)</div>", re.IGNORECASE | re.DOTALL)
 
-# Match the title div — a <div> wrapping bold text with font-size: 24px.
-_TITLE_INNER_RE = re.compile(
+# --- Title (note title — h1 OR legacy 24px span)
+# New native: <b><h1>...</h1></b>
+_TITLE_H1_RE = re.compile(
+    r"""<b\b[^>]*>\s*<h1\b[^>]*>(.*?)</h1>\s*</b>""",
+    re.IGNORECASE | re.DOTALL,
+)
+# Legacy (pre-0.10): <b><span style="font-size: 24px">...</span></b>
+_TITLE_SPAN_RE = re.compile(
     r"""<b\b[^>]*>\s*<span\b[^>]*font-size:\s*24px[^>]*>(.*?)</span>\s*</b>""",
     re.IGNORECASE | re.DOTALL,
 )
 
+# --- Heading and Subheading (h2/h3 OR legacy 18px/16px spans)
+# New native: <b><h2>...</h2></b> or <b><h3>...</h3></b>
+_HEADING_HN_RE = re.compile(
+    r"""<b\b[^>]*>\s*<h([23])\b[^>]*>(.*?)</h\1>\s*</b>""",
+    re.IGNORECASE | re.DOTALL,
+)
+# Legacy: <b><span style="font-size: 18px|16px">...</span></b>
+_HEADING_SPAN_RE = re.compile(
+    r"""<b\b[^>]*>\s*<span\b[^>]*font-size:\s*(\d+)px[^>]*>(.*?)</span>\s*</b>""",
+    re.IGNORECASE | re.DOTALL,
+)
+# Map legacy px → HeadingLine.level (matches h-tag numbers).
+_HEADING_LEGACY_SIZES: dict[int, int] = {18: 2, 16: 3}
+
 # Match a bare <br> (possibly self-closing) with optional whitespace.
 _BARE_BR_RE = re.compile(r"^\s*<br\s*/?>\s*$", re.IGNORECASE)
 
-# The BuJo monospace wrapper: <font face="Menlo-Regular"><tt>...</tt></font>
-# Tolerant of alternate fonts (Menlo, Courier) we've seen in the existing index.
+# The BuJo monospace wrapper. Apple Notes' native Monospaced paragraph
+# style is just `<div><tt>...</tt></div>` — no <font> wrapper. Older
+# versions of the scribe (and older Apple Notes builds) wrapped <tt> in
+# <font face="Menlo-Regular"> or `Courier`. The font wrapper is now
+# OPTIONAL — both formats parse to the same BujoLine.
 _MONOSPACE_INNER_RE = re.compile(
-    r"""<font\b[^>]*face=["']?(Menlo[^"'>]*|Courier[^"'>]*)["']?[^>]*>\s*<tt\b[^>]*>(.*?)</tt>\s*</font>""",
+    r"""(?:<font\b[^>]*face=["']?(?:Menlo[^"'>]*|Courier[^"'>]*)["']?[^>]*>)?\s*<tt\b[^>]*>(.*?)</tt>\s*(?:</font>)?""",
     re.IGNORECASE | re.DOTALL,
 )
 
 # The <s>...</s> wrapper for dropped tasks.
 _STRIKETHROUGH_RE = re.compile(r"<s\b[^>]*>(.*?)</s>", re.IGNORECASE | re.DOTALL)
+
+# Detect tables/objects — these stay as UnrecognizedLine for raw_html
+# preservation (and for the new update_unrecognized op).
+_TABLE_RE = re.compile(r"<(?:table|object)\b", re.IGNORECASE)
 
 
 # ---------------------------------------------------------------------------
@@ -163,18 +192,114 @@ def _resolve_signifier_maps(rules: Rules | None) -> tuple[dict[str, str], dict[s
 # ---------------------------------------------------------------------------
 
 
+_DIV_OPEN_RE = re.compile(r"<div\b[^>]*>", re.IGNORECASE)
+_DIV_CLOSE_RE = re.compile(r"</div\s*>", re.IGNORECASE)
+_OBJECT_OPEN_RE = re.compile(r"<object\b[^>]*>", re.IGNORECASE)
+_OBJECT_CLOSE_RE = re.compile(r"</object\s*>", re.IGNORECASE)
+
+
 def _extract_divs(body_html: str) -> list[tuple[str, str]]:
-    """Return (inner_html, full_div_html) for every top-level <div>."""
-    matches = _DIV_RE.finditer(body_html)
-    return [(m.group(1), m.group(0)) for m in matches]
+    """Return (inner_html, full_div_html) for every top-level <div>.
+
+    Tag-aware extraction: properly tracks `<div>` nesting and treats
+    `<object>...</object>` blocks as opaque (so nested `</div>` inside
+    table cells don't prematurely close the outer div). Real Apple Notes
+    tables embed `<div>` inside each `<td>`; without this awareness, the
+    naive `<div\b[^>]*>(.*?)</div>` regex would split the table across
+    many fragments.
+    """
+    results: list[tuple[str, str]] = []
+    pos = 0
+    n = len(body_html)
+    while pos < n:
+        m = _DIV_OPEN_RE.search(body_html, pos)
+        if m is None:
+            break
+        div_start = m.start()
+        content_start = m.end()
+        scan = content_start
+        depth = 1
+        end_pos: int | None = None
+        while scan < n:
+            obj = _OBJECT_OPEN_RE.match(body_html, scan)
+            if obj is not None:
+                # Skip the entire <object>...</object> block as opaque.
+                obj_close = _OBJECT_CLOSE_RE.search(body_html, obj.end())
+                if obj_close is None:
+                    # Malformed — bail out of the div hunt entirely.
+                    scan = n
+                    break
+                scan = obj_close.end()
+                continue
+
+            div_open = _DIV_OPEN_RE.match(body_html, scan)
+            if div_open is not None:
+                depth += 1
+                scan = div_open.end()
+                continue
+
+            div_close = _DIV_CLOSE_RE.match(body_html, scan)
+            if div_close is not None:
+                depth -= 1
+                if depth == 0:
+                    end_pos = div_close.start()
+                    after_close = div_close.end()
+                    break
+                scan = div_close.end()
+                continue
+
+            # Otherwise advance one character.
+            scan += 1
+
+        if end_pos is None:
+            # Couldn't close this div — give up to avoid infinite loops.
+            break
+
+        inner = body_html[content_start:end_pos]
+        full = body_html[div_start:after_close]
+        results.append((inner, full))
+        pos = after_close
+    return results
 
 
 def _match_title(inner_html: str) -> str | None:
-    m = _TITLE_INNER_RE.search(inner_html)
+    # Try new native h1 form first, then legacy 24px-span form.
+    m = _TITLE_H1_RE.search(inner_html) or _TITLE_SPAN_RE.search(inner_html)
     if not m:
         return None
     # Titles don't carry BuJo whitespace semantics — safe to trim both sides.
     return _decode_and_strip_tags(m.group(1)).strip(" \t\r\n")
+
+
+def _match_heading(inner_html: str) -> tuple[int, str] | None:
+    """Detect Apple Notes Heading (h2/legacy 18px) or Subheading (h3/legacy 16px).
+
+    Returns (level, text) or None. `level` matches the HTML h-tag number
+    directly: 2 for Heading, 3 for Subheading. Legacy 18px → 2, 16px → 3.
+    """
+    # New native: h2 / h3
+    m = _HEADING_HN_RE.search(inner_html)
+    if m is not None:
+        level = int(m.group(1))
+        text = _decode_and_strip_tags(m.group(2)).strip(" \t\r\n")
+        return (level, text)
+
+    # Legacy: bold + font-size span. Only sizes we map to heading levels
+    # qualify (18px → 2, 16px → 3); other sizes (24px = title; arbitrary
+    # = body styling) fall through.
+    m = _HEADING_SPAN_RE.search(inner_html)
+    if m is not None:
+        try:
+            px = int(m.group(1))
+        except ValueError:
+            return None
+        level = _HEADING_LEGACY_SIZES.get(px)
+        if level is None:
+            return None
+        text = _decode_and_strip_tags(m.group(2)).strip(" \t\r\n")
+        return (level, text)
+
+    return None
 
 
 def _parse_div(
@@ -189,41 +314,66 @@ def _parse_div(
     if _BARE_BR_RE.match(inner_html) or inner_html.strip() == "":
         return BlankLine(raw_html=raw_html)
 
-    # Unwrap the monospace font wrapper if present.
+    # Heading / Subheading — h2/h3 or legacy 18px/16px font-size span.
+    heading = _match_heading(inner_html)
+    if heading is not None:
+        level, text = heading
+        return HeadingLine(text=text, level=level, raw_html=raw_html)
+
+    # Tables and other <object>-wrapped structures stay as UnrecognizedLine
+    # so the raw_html survives round-trip and the new update_unrecognized
+    # op can mutate them. We check this BEFORE the body-line catch-all.
+    if _TABLE_RE.search(inner_html):
+        return UnrecognizedLine(raw_html=raw_html)
+
+    # Unwrap the monospace wrapper if present (font-wrap optional ≥0.10).
     mono = _MONOSPACE_INNER_RE.search(inner_html)
-    if mono is None:
-        return UnrecognizedLine(raw_html=raw_html)
+    if mono is not None:
+        content = mono.group(1)
 
-    content = mono.group(2)
+        # Detect strikethrough (dropped state).
+        dropped = False
+        strike = _STRIKETHROUGH_RE.search(content)
+        if strike is not None:
+            dropped = True
+            content = strike.group(1)
 
-    # Detect strikethrough (dropped state).
-    dropped = False
-    strike = _STRIKETHROUGH_RE.search(content)
-    if strike is not None:
-        dropped = True
-        content = strike.group(1)
+        # Decode entities and strip residual tags — but preserve ALL whitespace,
+        # because leading whitespace is semantically load-bearing (depth encoding).
+        # Only trim trailing whitespace so CRLFs from osascript output don't leak.
+        text_line = _decode_and_strip_tags(content).rstrip(" \t\r\n")
 
-    # Decode entities and strip residual tags — but preserve ALL whitespace,
-    # because leading whitespace is semantically load-bearing (depth encoding).
-    # Only trim trailing whitespace so CRLFs from osascript output don't leak.
-    text_line = _decode_and_strip_tags(content).rstrip(" \t\r\n")
+        parsed = _parse_bujo_line(
+            text_line, base_map=base_map, prefix_map=prefix_map, max_depth=max_depth
+        )
+        if parsed is not None:
+            base_key, prefix_key, depth, text = parsed
+            return BujoLine(
+                signifier=base_key,
+                prefix=prefix_key,
+                depth=depth,
+                text=text,
+                dropped=dropped,
+                anchor=_make_anchor(text),
+                raw_html=raw_html,
+            )
+        # Mono div whose content doesn't match a BuJo signifier — falls
+        # through to BodyLine since it's still "user-written paragraph
+        # content," just not a BuJo line. Examples: monospace calendar
+        # entries like `<tt>1 We</tt>` that the user types into a
+        # Monospaced paragraph but aren't bullets.
 
-    parsed = _parse_bujo_line(
-        text_line, base_map=base_map, prefix_map=prefix_map, max_depth=max_depth
-    )
-    if parsed is None:
-        return UnrecognizedLine(raw_html=raw_html)
-
-    base_key, prefix_key, depth, text = parsed
-    return BujoLine(
-        signifier=base_key,
-        prefix=prefix_key,
-        depth=depth,
-        text=text,
-        dropped=dropped,
-        anchor=_make_anchor(text),
-        raw_html=raw_html,
-    )
+    # Body line — any non-blank, non-heading, non-table div that the
+    # parser didn't claim as a BujoLine. Preserve raw_html for round-trip
+    # since body content can carry arbitrary inline styling (italic, bold,
+    # mixed, embedded fonts/emoji).
+    body_text = _decode_and_strip_tags(inner_html).strip(" \t\r\n")
+    # If the de-tagged text is empty (e.g., `<div><i><br></i></div>`),
+    # treat as blank — a body line with no text content is functionally
+    # a spacer.
+    if not body_text:
+        return BlankLine(raw_html=raw_html)
+    return BodyLine(text=body_text, raw_html=raw_html)
 
 
 def _decode_and_strip_tags(s: str) -> str:

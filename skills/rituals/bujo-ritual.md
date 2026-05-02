@@ -244,6 +244,37 @@ If Mike's check-in reflection touches items the orchestrator's `reflection_focus
 
 ---
 
+## Step 2.5 — Habit check-in (≥0.10) — INTERACTIVE, daily tier
+
+**Chapter mark at start:** `mcp__ccd_session__mark_chapter(title="Habits")` — only when habit table exists on `monthly_current`.
+
+**Skip this step entirely** if `monthly_current` has no habit-tracker table. Skip for non-daily tiers — habit tracking is daily-cadence aware; weekly/monthly/yearly rituals don't re-walk every day.
+
+### Flow
+
+For the daily tier, after Step 2's check-in and BEFORE Step 3's item review:
+
+1. Read `monthly_current` via `bujo_read`. Find the Tracker heading + the next `UnrecognizedLine` containing `<object><table` in raw_html.
+2. Parse column headers to get the habit list (skip Day + Weekday columns).
+3. For each habit:
+   - Parse cadence from the column header's `[<cadence>]` marker (default `daily`).
+   - Determine if today is a "due day" for that cadence.
+   - Find today's row + this habit's cell in the table.
+   - If the cell is empty AND today is a due day → habit is "open."
+4. Surface all open habits via a SINGLE `AskUserQuestion` call (batch up to 4 questions). Format same as the SessionStart hook's habit prompts.
+5. For each Yes → regenerate the table HTML with that cell flipped to `✅` (or `✅ <n>` for quantitative — agent asks "how much?" before dispatching). One `update_unrecognized` per habit, OR collect all updates and do one final `update_unrecognized` with the fully-updated table HTML (preferred — single write).
+6. For each No → skip silently. Self-throttle on 3+ consecutive nos.
+
+After all habits handled, proceed to Step 3.
+
+### Why here, not in capture
+
+Capture surfaces ad-hoc moments throughout the day. Step 2.5 is the structured ritual touchpoint — Mike sits down for the morning ritual and gets a clean batched prompt for ALL today's due habits. The ritual prompt is the right home for predictable, structured check-ins.
+
+If SessionStart already prompted some habits earlier today (and Mike answered), those cells are filled and won't show up here. The ritual sees the current state of the table.
+
+---
+
 ## Step 3 — Item-by-item review
 
 **Chapter mark at start:** `mcp__ccd_session__mark_chapter(title="Review")` (full tiers) or `mcp__ccd_session__mark_chapter(title="Disposition")` (weekly light mode).
@@ -475,9 +506,25 @@ If reflection produced nothing capturable (Mike's check-in was "fine, ready to g
 ### Tier-specific notes
 
 - **daily:** Part A scaffolds today (calendar events + Future Log surfacers). Part B writes captures to **yesterday** — yesterday is the artifact being completed.
-- **monthly:** Part A scaffolds this month (Future Log surfacers landing in this month). Part B writes captures to last month's monthly note — themes Mike named about the month that just ended.
+- **monthly:** Part A scaffolds this month (Future Log surfacers landing in this month + habit-tracker carry-forward, see below). Part B writes captures to last month's monthly note — themes Mike named about the month that just ended.
 - **yearly:** Part A scaffolds this year (Future Log entries for the new year). Part B writes captures to last year's yearly note — themes Mike named about the year that just ended.
 - **weekly (light):** Part A only. Weekly skips deep reflection, so there's rarely capturable content. If Mike said something worth keeping during item review, follow the same confirm-before-write protocol — target is the previous week's daily where the item lived (often clearer than a "previous week" note since weekly notes don't accumulate the same way).
+
+### Monthly Part A — habit tracker carry-forward (≥0.10)
+
+When scaffolding a new monthly note, the Tracker section + table carry forward — same habit columns as last month, completion cells reset to empty.
+
+1. Read last month's note via `bujo_read(notes: ["monthly_prev"])`.
+2. Find the Tracker heading + the next `UnrecognizedLine` containing `<object><table` in raw_html.
+3. Parse the header row to get the habit column headers (columns 3+).
+4. For the new month:
+   - Compute day count (28-31).
+   - Generate a new table with the same column headers, fresh date rows (one per day-of-month with day number + 2-letter weekday), and empty cells (`<div><br></div>`) under each habit.
+5. Add the Tracker heading + description + new table to the new monthly note.
+
+If `monthly_prev` has no habit table, scaffold this month with no habit table either — Mike adds his first habit via `/bujo-habit-add` when he's ready. The previous month's tracker stays untouched as historical record.
+
+For v1 implementation: since `bujo_apply_decisions:add` operates on `BujoLine` only, scaffold the Tracker section's heading + body via standard scaffold, then dispatch `update_unrecognized` to insert the table. If no placeholder UnrecognizedLine exists yet, fall back to inserting via raw note rewrite or escalate as a known v2 cleanup item (`add_unrecognized` op).
 
 ### Yearly-only — Future Log rollover
 

@@ -12,7 +12,9 @@ from __future__ import annotations
 from bujo_scribe_mcp.parsing.model import (
     BaseSignifier,
     BlankLine,
+    BodyLine,
     BujoLine,
+    HeadingLine,
     Line,
     ParsedNote,
     PrefixSignifier,
@@ -26,6 +28,8 @@ __all__ = [
     "PrefixSignifier",
     "BujoLine",
     "BlankLine",
+    "HeadingLine",
+    "BodyLine",
     "UnrecognizedLine",
     "Line",
     "ParsedNote",

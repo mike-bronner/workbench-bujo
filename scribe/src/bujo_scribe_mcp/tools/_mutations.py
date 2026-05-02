@@ -29,6 +29,7 @@ from bujo_scribe_mcp.schemas import (
     DecisionSchedule,
     DecisionUndrop,
     DecisionUpdate,
+    DecisionUpdateUnrecognized,
     DiffAdded,
     DiffChanged,
     DiffMoved,
@@ -236,6 +237,36 @@ def apply_remove(
     for i in sorted(indices_to_remove, reverse=True):
         del note.lines[i]
     return (diffs, None)
+
+
+def apply_update_unrecognized(
+    note: ParsedNote,
+    decision: DecisionUpdateUnrecognized,
+    rules: Rules,
+) -> tuple[list, str | None]:
+    """Replace an UnrecognizedLine's raw_html in place — added in 0.10.0.
+
+    Matches `decision.anchor` as a substring of each UnrecognizedLine's
+    raw_html. Use a unique substring (e.g., `<object><table` for a habit
+    tracker table) to disambiguate. Reasons:
+    - NOT_FOUND: no UnrecognizedLine's raw_html contains the anchor
+    - AMBIGUOUS_BULLET: more than one match
+    On success: replaces the matched line's raw_html with new_html;
+    returns a single DiffChanged.
+    """
+    matches: list[tuple[int, UnrecognizedLine]] = []
+    for idx, line in enumerate(note.lines):
+        if isinstance(line, UnrecognizedLine) and decision.anchor in line.raw_html:
+            matches.append((idx, line))
+
+    if not matches:
+        return ([], "NOT_FOUND")
+    if len(matches) > 1:
+        return ([], "AMBIGUOUS_BULLET")
+
+    idx, old = matches[0]
+    note.lines[idx] = UnrecognizedLine(raw_html=decision.new_html)
+    return ([DiffChanged(before=old.raw_html, after=decision.new_html)], None)
 
 
 def apply_reorder(

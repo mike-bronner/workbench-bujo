@@ -108,11 +108,18 @@ def test_blank_lines_are_filtered(make_backend, make_context, render_body, make_
 
 
 def test_unrecognized_lines_are_filtered(make_backend, make_context, render_body, make_bujo_line):
+    """UnrecognizedLine (e.g., a table) doesn't appear in `lines[]`. Use
+    `bujo_scan` with `status="unrecognized"` to surface it."""
+    table_html = (
+        "<div><object><table><tbody>"
+        "<tr><td><div>orphan content</div></td></tr>"
+        "</tbody></table></object><br></div>"
+    )
     body = render_body(
         "sample-note",
         [
             make_bujo_line("task", "Real BuJo task"),
-            UnrecognizedLine(raw_html="<div>legacy free-text content</div>"),
+            UnrecognizedLine(raw_html=table_html),
         ],
     )
     ctx = make_context(make_backend({"sample-note": body}))
@@ -122,6 +129,7 @@ def test_unrecognized_lines_are_filtered(make_backend, make_context, render_body
 
     assert len(lines) == 1
     assert lines[0].text == "Real BuJo task"
+    assert lines[0].kind == "bujo"
 
 
 def test_missing_note_returns_lines_none(make_backend, make_context):

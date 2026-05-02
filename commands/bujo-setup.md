@@ -172,6 +172,36 @@ On confirmation:
 1. For each legacy scheduled task ID, call `mcp__scheduled-tasks__delete_scheduled_task` (or disable if delete isn't available).
 2. Delete deprecated directories in `~/Documents/Claude/Scheduled/`.
 
+## Step 7.5 — Habit tracker prerequisite (≥0.10)
+
+Habit tracking lives on the monthly note as a real Apple Notes table under a **Tracker** heading. Setup verifies the current monthly note has a Tracker section so habit-add can land its column on the table without bootstrap friction.
+
+1. Read `monthly_current` via `mcp__plugin_workbench-bujo_scribe__bujo_read`.
+2. Look for `kind: "heading"` line with `text: "Tracker"`. If found AND a following `UnrecognizedLine` (or raw HTML containing `<object><table`) exists → already set up; skip this step.
+3. If absent, ask Mike via `AskUserQuestion`:
+
+```jsonc
+AskUserQuestion({
+  questions: [{
+    question: "No habit tracker found on this month's note. Add a Tracker section so /bujo-habit-add can use it?",
+    header: "Tracker",
+    multiSelect: false,
+    options: [
+      { label: "Yes — add it", description: "Scaffolds the Tracker heading + a stub table" },
+      { label: "Not now",      description: "Skip — you can add later" }
+    ]
+  }]
+})
+```
+
+On Yes:
+- For v1 simplicity: tell Mike to open the current monthly note in Apple Notes and add a Tracker heading (Cmd+Opt+2 → Heading) + a 2-column table (Day | Weekday) using Apple Notes' Insert Table. This avoids needing to generate a fresh table via raw HTML insertion.
+- Future v2: scribe op `add_unrecognized` will let setup automate this.
+
+On Not now → continue with setup.
+
+This step is non-blocking — habit tracking just won't work until the table exists, but the rest of setup is unaffected.
+
 ## Step 8 — Confirm
 
 Tell Mike:
