@@ -5,11 +5,11 @@ Resolves every identifier (slug or explicit title) to a concrete title via
 body into structured `ParsedLine` entries. Missing notes come back with
 `exists=False, lines=None` — never an error.
 
-Lines exposed on the wire (post-0.10): BuJo bullets (`kind="bujo"`),
-Headings/Subheadings (`kind="heading"`), and Body paragraphs
-(`kind="body"`). Blank rows and `UnrecognizedLine` (tables, etc.) are
-filtered — use `bujo_scan` with `status="unrecognized"` to surface
-non-structured content.
+Lines exposed on the wire: BuJo bullets (`kind="bujo"`), Headings/
+Subheadings (`kind="heading"`), Body paragraphs (`kind="body"`), and
+Tables (`kind="table"`, with raw_html populated for cell-level access).
+Blank rows and `UnrecognizedLine` (true catch-all) are filtered — use
+`bujo_scan` with `status="unrecognized"` to surface them for cleanup.
 """
 
 from __future__ import annotations
@@ -18,7 +18,13 @@ from datetime import datetime, timezone
 
 from bujo_scribe_mcp.backends.base import BackendError
 from bujo_scribe_mcp.context import Context
-from bujo_scribe_mcp.parsing import BodyLine, BujoLine, HeadingLine, parse_note
+from bujo_scribe_mcp.parsing import (
+    BodyLine,
+    BujoLine,
+    HeadingLine,
+    TableLine,
+    parse_note,
+)
 from bujo_scribe_mcp.resolver import ResolverError, resolve
 from bujo_scribe_mcp.schemas import NoteContent, ParsedLine, ReadInput, ReadOutput
 
@@ -96,6 +102,15 @@ def _to_parsed_line(line) -> ParsedLine | None:
             kind="body",
             text=line.text,
             anchor=line.text,
+        )
+    if isinstance(line, TableLine):
+        return ParsedLine(
+            kind="table",
+            text="",
+            # `<object><table` is a stable substring for the standard
+            # `update_table` / `add_table` anchor pattern.
+            anchor="<object><table",
+            raw_html=line.raw_html,
         )
     # BlankLine and UnrecognizedLine are filtered out.
     return None

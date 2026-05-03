@@ -174,33 +174,50 @@ On confirmation:
 
 ## Step 7.5 — Habit tracker prerequisite (≥0.10)
 
-Habit tracking lives on the monthly note as a real Apple Notes table under a **Tracker** heading. Setup verifies the current monthly note has a Tracker section so habit-add can land its column on the table without bootstrap friction.
+Habit tracking lives on the monthly note as a real Apple Notes table under a **Tracker** heading. Setup verifies the current monthly note has a Tracker section AND auto-creates it if missing — Mike never has to set up the table manually.
 
 1. Read `monthly_current` via `mcp__plugin_workbench-bujo_scribe__bujo_read`.
-2. Look for `kind: "heading"` line with `text: "Tracker"`. If found AND a following `UnrecognizedLine` (or raw HTML containing `<object><table`) exists → already set up; skip this step.
+2. Look for `kind: "heading"` line with `text: "Tracker"`. If found AND a following line with `kind: "table"` exists → already set up; skip this step.
 3. If absent, ask Mike via `AskUserQuestion`:
 
 ```jsonc
 AskUserQuestion({
   questions: [{
-    question: "No habit tracker found on this month's note. Add a Tracker section so /bujo-habit-add can use it?",
+    question: "No habit tracker found on this month's note. Add a Tracker section + empty table so /bujo-habit-add can use it?",
     header: "Tracker",
     multiSelect: false,
     options: [
-      { label: "Yes — add it", description: "Scaffolds the Tracker heading + a stub table" },
-      { label: "Not now",      description: "Skip — you can add later" }
+      { label: "Yes — create it", description: "MCP scaffolds Tracker heading + empty habit table" },
+      { label: "Not now",          description: "Skip — habit-add will offer to create it later" }
     ]
   }]
 })
 ```
 
-On Yes:
-- For v1 simplicity: tell Mike to open the current monthly note in Apple Notes and add a Tracker heading (Cmd+Opt+2 → Heading) + a 2-column table (Day | Weekday) using Apple Notes' Insert Table. This avoids needing to generate a fresh table via raw HTML insertion.
-- Future v2: scribe op `add_unrecognized` will let setup automate this.
+On Yes — auto-create everything:
 
-On Not now → continue with setup.
+- **If Tracker heading is missing**: scaffold the heading via `bujo_scaffold` (mode: merge) or via an explicit `apply_decisions` flow that produces a `<div><b><h2>Tracker</h2></b><h2><br></h2></div>` line.
+- **Add the empty table** via `add_table`:
+  - Compute current month's day count (28-31).
+  - Generate a 2-column table (Day | Weekday) with one row per day-of-month, day number + 2-letter weekday code in each row.
+  - Dispatch:
 
-This step is non-blocking — habit tracking just won't work until the table exists, but the rest of setup is unaffected.
+  ```jsonc
+  bujo_apply_decisions({
+    note: "monthly_current",
+    decisions: [{
+      op: "add_table",
+      after_anchor: "Tracker",
+      new_html: "<full empty table HTML>"
+    }]
+  })
+  ```
+
+- The MCP creates the structure; no Apple Notes manual work required.
+
+On Not now → continue. `bujo-habit-add` will offer to create it the first time Mike runs the command.
+
+This step is non-blocking — the rest of setup is unaffected if Mike declines.
 
 ## Step 8 — Confirm
 

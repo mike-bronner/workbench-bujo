@@ -116,9 +116,8 @@ class ReadInput(BaseModel):
 class ParsedLine(BaseModel):
     """A single semantic line as it appears on a note.
 
-    The wire-side projection of the internal parsing line types
-    (`BujoLine`, `HeadingLine`, `BodyLine`) — raw HTML is intentionally
-    NOT exposed. Callers discriminate on `kind`:
+    The wire-side projection of the internal parsing line types. Callers
+    discriminate on `kind`:
 
     - `kind="bujo"` — a BuJo bullet. signifier/prefix/depth/dropped/text
       are populated. `anchor` round-trips back into `apply_decisions` as
@@ -128,24 +127,28 @@ class ParsedLine(BaseModel):
       carry the heading text.
     - `kind="body"` — a paragraph that's neither bullet nor heading.
       Body lines preserve arbitrary inline styling on the note (italic,
-      bold, mixed); `text` is the de-tagged plain-text view. We don't
-      expose `raw_html` here — agents don't reconstruct body HTML.
+      bold, mixed); `text` is the de-tagged plain-text view.
+    - `kind="table"` — an Apple Notes table. `raw_html` carries the
+      full `<div><object><table>…</table></object><br></div>` block.
+      Agents parse the HTML to read cells and regenerate it on update.
 
-    `BlankLine` and `UnrecognizedLine` (tables, etc.) are filtered out
-    of `lines[]` per v0.8.0 behavior. Use `bujo_scan` with
-    `status="unrecognized"` to surface non-structured content.
+    `BlankLine` and `UnrecognizedLine` (true unknowns) are filtered out
+    of `lines[]`. Use `bujo_scan` with `status="unrecognized"` to surface
+    catch-all content for cleanup.
     """
 
-    kind: Literal["bujo", "heading", "body"] = Field(
+    kind: Literal["bujo", "heading", "body", "table"] = Field(
         default="bujo",
         description="Discriminator for the line variant.",
     )
-    text: str = Field(description="Plain-text content of the line.")
+    text: str = Field(description="Plain-text content of the line. Empty for tables.")
     anchor: str = Field(
         description=(
             "Stable identifier. For bujo lines: the bullet anchor (pass "
             "back as `bullet` in apply_decisions). For heading/body: the "
-            "de-tagged text (used for substring matching / lookup)."
+            "de-tagged text. For tables: a substring of raw_html the "
+            "agent can use as the `update_table` anchor (e.g., "
+            "`<object><table`)."
         )
     )
     # bujo-only fields
@@ -167,6 +170,15 @@ class ParsedLine(BaseModel):
     heading_level: int | None = Field(
         default=None,
         description="Heading lines only. 2 = Heading (h2), 3 = Subheading (h3).",
+    )
+    # table-only fields
+    raw_html: str | None = Field(
+        default=None,
+        description=(
+            "Table lines only. The full `<div><object><table>…</table></object><br></div>` "
+            "HTML block. Agents parse this for cell-level access and dispatch "
+            "`update_table` with the regenerated HTML to write changes."
+        ),
     )
 
 
@@ -301,26 +313,50 @@ class DecisionCombine(BaseModel):
     parent_bullet: str
 
 
-class DecisionUpdateUnrecognized(BaseModel):
-    """Replace an UnrecognizedLine's raw_html in place — added in 0.10.0.
+class DecisionUpdateTable(BaseModel):
+    """Replace a `TableLine`'s raw_html in place — added in 0.10.
 
-    UnrecognizedLine carries the raw HTML for content the parser
-    couldn't classify into a structured line type (typically tables and
-    other `<object>`-wrapped content). The standard `update` op operates
-    on `BujoLine.text`, so it can't mutate tables. This op gives a
-    structured update path for the table itself.
+    Tables (Apple Notes `<div><object><table>…</table></object><br></div>`
+    blocks) round-trip raw_html exactly because their cell content can
+    carry arbitrary inline styling. The standard `update` op operates
+    on `BujoLine.text`, so it can't mutate tables. This op gives the
+    structured update path.
 
-    Matches by `anchor`: a substring that must appear within the target
-    line's `raw_html`. Use a unique substring (e.g., `<object><table` for
-    a habit-tracker table). Ambiguous matches → AMBIGUOUS_BULLET. Missing
-    → NOT_FOUND.
+    Matches by `anchor`: a substring within the target table's
+    `raw_html`. Use a unique substring (e.g., `<object><table` for the
+    habit-tracker table, or a column header text for disambiguation
+    when multiple tables exist on the same note). Ambiguous →
+    AMBIGUOUS_BULLET. Missing → NOT_FOUND.
 
-    Use case: the habit tracker on the monthly note. The agent reads the
-    table via `bujo_read`, regenerates the full table HTML with cell
-    updates applied, and dispatches this op to write the new HTML back."""
+    Use case: the habit tracker on the monthly note. The agent reads
+    the table via `bujo_read` (kind=table, raw_html populated),
+    regenerates the full table HTML with cell updates applied, and
+    dispatches this op to write the new HTML back."""
 
-    op: Literal["update_unrecognized"]
+    op: Literal["update_table"]
     anchor: str
+    new_html: str
+
+
+class DecisionAddTable(BaseModel):
+    """Insert a fresh `TableLine` into a note — added in 0.10.
+
+    Use case: scaffold a table that doesn't yet exist (e.g., the
+    habit-tracker table when bujo-habit-add fires on a fresh monthly
+    note). Paired with `update_table` for in-place edits afterward.
+
+    `after_anchor`: substring search against the text/raw_html of any
+    line. If a single line matches, the table inserts immediately
+    after it (use a heading anchor like `Tracker` to land it under the
+    section header). If empty, appends at end of note. Ambiguity →
+    AMBIGUOUS_BULLET. Missing match → NOT_FOUND.
+
+    `new_html`: the full table HTML to insert as-is. Must be the
+    complete `<div><object><table>…</table></object><br></div>` block
+    so the parser recognizes it as a TableLine on the next read."""
+
+    op: Literal["add_table"]
+    after_anchor: str = ""  # empty = append at end
     new_html: str
 
 
@@ -335,7 +371,8 @@ Decision = (
     | DecisionReorder
     | DecisionRemove
     | DecisionCombine
-    | DecisionUpdateUnrecognized
+    | DecisionUpdateTable
+    | DecisionAddTable
 )
 
 

@@ -109,10 +109,10 @@ bujo_read(notes: ["monthly_current"])
 
 Find the existing habit tracker:
 1. Look for `lines[]` entry with `kind: "heading"` and `text: "Tracker"`.
-2. The next `UnrecognizedLine` (filtered out of `lines[]` but visible in raw response — fall back to scanning the raw `content` for `<object><table` if needed).
+2. The next `lines[]` entry with `kind: "table"` is the habit tracker. Its `raw_html` field carries the full table HTML for parsing.
 
 If the Tracker heading doesn't exist yet, scaffold a minimal one (see "Bootstrap" below).
-If the table doesn't exist yet, generate the initial empty table for the current month (see "Initial table" below).
+If the heading exists but the table doesn't, scaffold the initial empty table (see "Initial table" below).
 
 ## Step 4 — Regenerate the table HTML with the new column added
 
@@ -144,20 +144,22 @@ For mid-month adds, ALL existing date rows get an empty cell appended (past days
 </table></object><br></div>
 ```
 
-## Step 5 — Dispatch the update
+## Step 5 — Dispatch the update (or add)
+
+If a table already exists, replace it:
 
 ```
 bujo_apply_decisions(payload={
   note: "monthly_current",
   decisions: [{
-    op: "update_unrecognized",
+    op: "update_table",
     anchor: "<object><table",
     new_html: "<the regenerated table HTML>"
   }]
 })
 ```
 
-If the response includes `unmatched` for this op, surface it to Mike — it likely means the Tracker section / table needs scaffolding (see "Bootstrap" / "Initial table" below).
+If the table doesn't exist yet (no TableLine after the Tracker heading), scaffold it via `add_table` anchored on the Tracker heading. See "Initial table" below.
 
 ## Step 6 — Confirm
 
@@ -165,26 +167,69 @@ Single line: *"🪶 Added habit: `<header text>`"*
 
 ## Bootstrap (if Tracker section absent)
 
-If the monthly note has no Tracker heading:
-1. Add the heading + description body line via `bujo_apply_decisions:add` with appropriate signifier (or scaffold if needed).
-2. Then proceed to the table.
+If the monthly note has no Tracker heading, the MCP creates everything for Mike — no manual setup. Confirm with `AskUserQuestion`:
 
-For v1: if the Tracker section is missing on the current monthly note, ask Mike: *"No habit tracker on this month's note yet. Add a Tracker section?"* Yes → scaffold the heading + description + initial table. No → abort the habit-add.
+```jsonc
+AskUserQuestion({
+  questions: [{
+    question: "No Tracker section on this month's note. Add one with the new habit?",
+    header: "Tracker",
+    multiSelect: false,
+    options: [
+      { label: "Yes — create Tracker + table", description: "Scaffolds heading, description, and initial habit table" },
+      { label: "No — cancel",                  description: "Abort habit-add" }
+    ]
+  }]
+})
+```
+
+On Yes, scaffold both the heading and the initial table:
+
+1. Use `bujo_scaffold` (mode: merge) to add the Tracker heading + a body description line, OR add them via individual `apply_decisions` ops if scaffold isn't suited.
+2. Then dispatch `add_table` (see below) anchored on the new Tracker heading.
 
 ## Initial table generation (no table yet)
 
-If Tracker section exists but table doesn't, generate the full table for the current month:
-1. Compute current month's day count (28-31).
-2. Compute weekday for each day-of-month using a date library or simple math.
-3. Header row: `Day | Weekday | <new habit header>`
-4. Date rows: one per day-of-month, with day number, 2-letter weekday code, and one empty cell for the new habit.
+When the Tracker heading exists but no table follows, scaffold the table directly via `add_table`:
 
-Then dispatch `bujo_apply_decisions:add` with section "" or anchored after the Tracker heading. Since `add` works on `BujoLine` only, use a fallback approach:
-- Scaffold the table as part of a fresh `bujo_scaffold` call with `mode: merge`.
+1. Compute current month's day count (28, 29, 30, or 31) using today's date in the configured timezone.
+2. For each day-of-month, compute the 2-letter weekday code (`Mo`/`Tu`/`We`/`Th`/`Fr`/`Sa`/`Su`).
+3. Generate the full table HTML using the Apple Notes table format:
 
-For v1, simplest: if no table exists, fall back to manually creating it via `bujo_apply_decisions:add` with a sentinel BujoLine + an immediate `update_unrecognized` to replace it. Or: punt to scribe-side support for `add_unrecognized` in a later release.
+```html
+<div><object><table cellspacing="0" cellpadding="0" style="border-collapse: collapse; direction: ltr">
+<tbody>
+<tr>
+  <td valign="top" style="border-style: solid; border-width: 1.0px 1.0px 1.0px 1.0px; border-color: #ccc; padding: 3.0px 5.0px 3.0px 5.0px; min-width: 70px"><div><b>Day</b></div></td>
+  <td valign="top" style="..."><div><b>Weekday</b></div></td>
+  <td valign="top" style="..."><div><b><HABIT-HEADER></b></div></td>
+</tr>
+<tr>
+  <td valign="top" style="..."><div>1</div></td>
+  <td valign="top" style="..."><div>We</div></td>
+  <td valign="top" style="..."><div><br></div></td>
+</tr>
+<!-- repeat for days 2..N -->
+</tbody>
+</table></object><br></div>
+```
 
-**v1 simplification:** if the table doesn't exist, surface to Mike: *"There's no habit tracker table on this month's note yet. Create one in Apple Notes (Tracker → Insert → Table with columns Day / Weekday) then re-run /bujo-habit-add."* Defer initial-table-generation to v2 once `add_unrecognized` exists.
+4. Dispatch:
+
+```jsonc
+bujo_apply_decisions({
+  note: "monthly_current",
+  decisions: [{
+    op: "add_table",
+    after_anchor: "Tracker",
+    new_html: "<full table HTML>"
+  }]
+})
+```
+
+`add_table` matches the Tracker heading by text substring and inserts the new TableLine immediately after it. **The MCP creates the table — Mike never has to set it up manually in Apple Notes.**
+
+If `after_anchor: "Tracker"` returns NOT_FOUND (no heading) or AMBIGUOUS_BULLET (multiple match), surface the error or scaffold the heading first.
 
 ## Hard rules
 

@@ -1,9 +1,8 @@
-"""Tests for the bujo_apply_decisions:update_unrecognized op — added in 0.10.0.
+"""Tests for the bujo_apply_decisions:update_table op — added in 0.10.
 
-Replaces an UnrecognizedLine's raw_html in place. Used by the habit
-tracker to mutate the table that lives on the monthly note (a
-`<div><object><table>...</table></object><br></div>` block that the
-parser preserves as UnrecognizedLine).
+Replaces a TableLine's raw_html in place. Used by the habit tracker to
+mutate the table on the monthly note (a `<div><object><table>…</table></object><br></div>`
+block that parses as TableLine).
 
 Match by `anchor`: substring of the line's raw_html.
 - 0 matches → NOT_FOUND in `unmatched`
@@ -13,10 +12,10 @@ Match by `anchor`: substring of the line's raw_html.
 
 from __future__ import annotations
 
-from bujo_scribe_mcp.parsing import UnrecognizedLine
+from bujo_scribe_mcp.parsing import TableLine
 from bujo_scribe_mcp.schemas import (
     ApplyDecisionsInput,
-    DecisionUpdateUnrecognized,
+    DecisionUpdateTable,
 )
 from bujo_scribe_mcp.tools import apply_decisions
 
@@ -36,14 +35,14 @@ _TABLE_AFTER = (
 )
 
 
-def test_update_unrecognized_replaces_raw_html(
+def test_update_table_replaces_raw_html(
     make_backend, make_context, render_body, make_bujo_line
 ):
     body = render_body(
         "sample-note",
         [
             make_bujo_line("task", "Some other task"),
-            UnrecognizedLine(raw_html=_TABLE_BEFORE),
+            TableLine(raw_html=_TABLE_BEFORE),
         ],
     )
     ctx = make_context(make_backend({"sample-note": body}))
@@ -52,8 +51,8 @@ def test_update_unrecognized_replaces_raw_html(
         ApplyDecisionsInput(
             note="sample-note",
             decisions=[
-                DecisionUpdateUnrecognized(
-                    op="update_unrecognized",
+                DecisionUpdateTable(
+                    op="update_table",
                     anchor="<object><table",
                     new_html=_TABLE_AFTER,
                 ),
@@ -63,7 +62,6 @@ def test_update_unrecognized_replaces_raw_html(
     )
 
     assert not out.unmatched
-    # The note should now contain the new table HTML.
     backend = ctx.backend
     ref = backend.find_by_title("sample-note")
     note = backend.read(ref)
@@ -71,12 +69,12 @@ def test_update_unrecognized_replaces_raw_html(
     assert _TABLE_BEFORE not in note.content
 
 
-def test_update_unrecognized_returns_diff_changed(
+def test_update_table_returns_diff_changed(
     make_backend, make_context, render_body, make_bujo_line
 ):
     body = render_body(
         "sample-note",
-        [UnrecognizedLine(raw_html=_TABLE_BEFORE)],
+        [TableLine(raw_html=_TABLE_BEFORE)],
     )
     ctx = make_context(make_backend({"sample-note": body}))
 
@@ -84,8 +82,8 @@ def test_update_unrecognized_returns_diff_changed(
         ApplyDecisionsInput(
             note="sample-note",
             decisions=[
-                DecisionUpdateUnrecognized(
-                    op="update_unrecognized",
+                DecisionUpdateTable(
+                    op="update_table",
                     anchor="<object><table",
                     new_html=_TABLE_AFTER,
                 ),
@@ -99,7 +97,7 @@ def test_update_unrecognized_returns_diff_changed(
     assert out.diff.changed[0].after == _TABLE_AFTER
 
 
-def test_update_unrecognized_not_found(
+def test_update_table_not_found(
     make_backend, make_context, render_body, make_bujo_line
 ):
     body = render_body(
@@ -112,8 +110,8 @@ def test_update_unrecognized_not_found(
         ApplyDecisionsInput(
             note="sample-note",
             decisions=[
-                DecisionUpdateUnrecognized(
-                    op="update_unrecognized",
+                DecisionUpdateTable(
+                    op="update_table",
                     anchor="<object><table",
                     new_html=_TABLE_AFTER,
                 ),
@@ -126,16 +124,16 @@ def test_update_unrecognized_not_found(
     assert out.unmatched[0].reason == "NOT_FOUND"
 
 
-def test_update_unrecognized_ambiguous(
+def test_update_table_ambiguous(
     make_backend, make_context, render_body, make_bujo_line
 ):
-    """Two UnrecognizedLines whose raw_html both contain the anchor →
+    """Two TableLines whose raw_html both contain the anchor →
     AMBIGUOUS_BULLET. Caller must pick a more specific anchor."""
     body = render_body(
         "sample-note",
         [
-            UnrecognizedLine(raw_html=_TABLE_BEFORE),
-            UnrecognizedLine(raw_html=_TABLE_BEFORE.replace("Day", "Date")),
+            TableLine(raw_html=_TABLE_BEFORE),
+            TableLine(raw_html=_TABLE_BEFORE.replace("Day", "Date")),
         ],
     )
     ctx = make_context(make_backend({"sample-note": body}))
@@ -144,8 +142,8 @@ def test_update_unrecognized_ambiguous(
         ApplyDecisionsInput(
             note="sample-note",
             decisions=[
-                DecisionUpdateUnrecognized(
-                    op="update_unrecognized",
+                DecisionUpdateTable(
+                    op="update_table",
                     anchor="<object><table",  # matches both
                     new_html=_TABLE_AFTER,
                 ),
@@ -158,15 +156,14 @@ def test_update_unrecognized_ambiguous(
     assert out.unmatched[0].reason == "AMBIGUOUS_BULLET"
 
 
-def test_update_unrecognized_round_trips_through_render(
+def test_update_table_round_trips_through_render(
     make_backend, make_context, render_body, make_bujo_line
 ):
     """After the update, re-reading the note via the standard path should
-    return the new HTML as an UnrecognizedLine again — no formatting
-    damage on round-trip."""
+    still find the table — no formatting damage on round-trip."""
     body = render_body(
         "sample-note",
-        [UnrecognizedLine(raw_html=_TABLE_BEFORE)],
+        [TableLine(raw_html=_TABLE_BEFORE)],
     )
     ctx = make_context(make_backend({"sample-note": body}))
 
@@ -174,8 +171,8 @@ def test_update_unrecognized_round_trips_through_render(
         ApplyDecisionsInput(
             note="sample-note",
             decisions=[
-                DecisionUpdateUnrecognized(
-                    op="update_unrecognized",
+                DecisionUpdateTable(
+                    op="update_table",
                     anchor="<object><table",
                     new_html=_TABLE_AFTER,
                 ),
@@ -184,13 +181,12 @@ def test_update_unrecognized_round_trips_through_render(
         ctx=ctx,
     )
 
-    # Apply a no-op: a second update with the same anchor + same new_html.
     out = apply_decisions.execute(
         ApplyDecisionsInput(
             note="sample-note",
             decisions=[
-                DecisionUpdateUnrecognized(
-                    op="update_unrecognized",
+                DecisionUpdateTable(
+                    op="update_table",
                     anchor="<object><table",
                     new_html=_TABLE_AFTER,
                 ),
@@ -198,5 +194,4 @@ def test_update_unrecognized_round_trips_through_render(
         ),
         ctx=ctx,
     )
-    # No unmatched — the table is still findable after the first update's render.
     assert not out.unmatched

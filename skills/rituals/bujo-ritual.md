@@ -254,7 +254,7 @@ If Mike's check-in reflection touches items the orchestrator's `reflection_focus
 
 For the daily tier, after Step 2's check-in and BEFORE Step 3's item review:
 
-1. Read `monthly_current` via `bujo_read`. Find the Tracker heading + the next `UnrecognizedLine` containing `<object><table` in raw_html.
+1. Read `monthly_current` via `bujo_read`. Find the Tracker heading + the next line with `kind="table"` (its `raw_html` field carries the table HTML).
 2. Parse column headers to get the habit list (skip Day + Weekday columns).
 3. For each habit:
    - Parse cadence from the column header's `[<cadence>]` marker (default `daily`).
@@ -262,7 +262,7 @@ For the daily tier, after Step 2's check-in and BEFORE Step 3's item review:
    - Find today's row + this habit's cell in the table.
    - If the cell is empty AND today is a due day → habit is "open."
 4. Surface all open habits via a SINGLE `AskUserQuestion` call (batch up to 4 questions). Format same as the SessionStart hook's habit prompts.
-5. For each Yes → regenerate the table HTML with that cell flipped to `✅` (or `✅ <n>` for quantitative — agent asks "how much?" before dispatching). One `update_unrecognized` per habit, OR collect all updates and do one final `update_unrecognized` with the fully-updated table HTML (preferred — single write).
+5. For each Yes → regenerate the table HTML with that cell flipped to `✅` (or `✅ <n>` for quantitative — agent asks "how much?" before dispatching). One `update_table` per habit, OR collect all updates and do one final `update_table` with the fully-updated table HTML (preferred — single write).
 6. For each No → skip silently. Self-throttle on 3+ consecutive nos.
 
 After all habits handled, proceed to Step 3.
@@ -515,7 +515,7 @@ If reflection produced nothing capturable (Mike's check-in was "fine, ready to g
 When scaffolding a new monthly note, the Tracker section + table carry forward — same habit columns as last month, completion cells reset to empty.
 
 1. Read last month's note via `bujo_read(notes: ["monthly_prev"])`.
-2. Find the Tracker heading + the next `UnrecognizedLine` containing `<object><table` in raw_html.
+2. Find the Tracker heading + the next line with `kind="table"` (its `raw_html` field carries the table HTML).
 3. Parse the header row to get the habit column headers (columns 3+).
 4. For the new month:
    - Compute day count (28-31).
@@ -524,7 +524,7 @@ When scaffolding a new monthly note, the Tracker section + table carry forward �
 
 If `monthly_prev` has no habit table, scaffold this month with no habit table either — Mike adds his first habit via `/bujo-habit-add` when he's ready. The previous month's tracker stays untouched as historical record.
 
-For v1 implementation: since `bujo_apply_decisions:add` operates on `BujoLine` only, scaffold the Tracker section's heading + body via standard scaffold, then dispatch `update_unrecognized` to insert the table. If no placeholder UnrecognizedLine exists yet, fall back to inserting via raw note rewrite or escalate as a known v2 cleanup item (`add_unrecognized` op).
+**Implementation:** scaffold the Tracker heading + body description via standard `bujo_scaffold` (or `apply_decisions` ops), then dispatch `add_table` (≥0.10) anchored on the heading to insert the empty table. The `add_table` op creates the table — Mike never sets it up manually.
 
 ### Yearly-only — Future Log rollover
 

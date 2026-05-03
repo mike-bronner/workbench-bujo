@@ -87,18 +87,35 @@ class BodyLine:
 
 
 @dataclass
-class UnrecognizedLine:
-    """A div whose content didn't parse as a known line type.
+class TableLine:
+    """An Apple Notes table — `<div><object><table>…</table></object><br></div>`.
 
-    Preserved verbatim so we can round-trip it through renderer without
-    mutating content we don't understand. Tables (which can't be cleanly
-    represented as a structured line) live here.
+    Tables can't be cleanly represented as structured fields (rows,
+    columns, cells with arbitrary inline styling), so we preserve the
+    raw HTML for round-trip and let callers parse/regenerate the HTML
+    when they need to mutate cells.
+
+    Used most heavily by the habit tracker on the monthly note. Mutate
+    via the `update_table` / `add_table` decision ops.
     """
 
     raw_html: str
 
 
-Line = BujoLine | BlankLine | HeadingLine | BodyLine | UnrecognizedLine
+@dataclass
+class UnrecognizedLine:
+    """A div the parser couldn't classify into a known line type.
+
+    Preserved verbatim so we can round-trip it through the renderer
+    without mutating content we don't understand. Reserved for true
+    catch-all cases — tables have their own `TableLine` type, headings
+    have `HeadingLine`, etc.
+    """
+
+    raw_html: str
+
+
+Line = BujoLine | BlankLine | HeadingLine | BodyLine | TableLine | UnrecognizedLine
 
 
 @dataclass

@@ -14,12 +14,21 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import date, timedelta
 
-from bujo_scribe_mcp.parsing import BlankLine, BujoLine, ParsedNote, UnrecognizedLine
+from bujo_scribe_mcp.parsing import (
+    BlankLine,
+    BodyLine,
+    BujoLine,
+    HeadingLine,
+    ParsedNote,
+    TableLine,
+    UnrecognizedLine,
+)
 from bujo_scribe_mcp.parsing.renderer import render_line
 from bujo_scribe_mcp.rules import Rules
 from bujo_scribe_mcp.schemas import (
     Bullet,
     DecisionAdd,
+    DecisionAddTable,
     DecisionCombine,
     DecisionComplete,
     DecisionDrop,
@@ -29,7 +38,7 @@ from bujo_scribe_mcp.schemas import (
     DecisionSchedule,
     DecisionUndrop,
     DecisionUpdate,
-    DecisionUpdateUnrecognized,
+    DecisionUpdateTable,
     DiffAdded,
     DiffChanged,
     DiffMoved,
@@ -239,24 +248,25 @@ def apply_remove(
     return (diffs, None)
 
 
-def apply_update_unrecognized(
+def apply_update_table(
     note: ParsedNote,
-    decision: DecisionUpdateUnrecognized,
+    decision: DecisionUpdateTable,
     rules: Rules,
 ) -> tuple[list, str | None]:
-    """Replace an UnrecognizedLine's raw_html in place — added in 0.10.0.
+    """Replace a TableLine's raw_html in place — added in 0.10.
 
-    Matches `decision.anchor` as a substring of each UnrecognizedLine's
-    raw_html. Use a unique substring (e.g., `<object><table` for a habit
-    tracker table) to disambiguate. Reasons:
-    - NOT_FOUND: no UnrecognizedLine's raw_html contains the anchor
+    Matches `decision.anchor` as a substring of each TableLine's
+    raw_html. Use a unique substring (e.g., `<object><table` plus a
+    column header text) to disambiguate when multiple tables exist on
+    the same note. Reasons:
+    - NOT_FOUND: no TableLine's raw_html contains the anchor
     - AMBIGUOUS_BULLET: more than one match
     On success: replaces the matched line's raw_html with new_html;
     returns a single DiffChanged.
     """
-    matches: list[tuple[int, UnrecognizedLine]] = []
+    matches: list[tuple[int, TableLine]] = []
     for idx, line in enumerate(note.lines):
-        if isinstance(line, UnrecognizedLine) and decision.anchor in line.raw_html:
+        if isinstance(line, TableLine) and decision.anchor in line.raw_html:
             matches.append((idx, line))
 
     if not matches:
@@ -265,8 +275,66 @@ def apply_update_unrecognized(
         return ([], "AMBIGUOUS_BULLET")
 
     idx, old = matches[0]
-    note.lines[idx] = UnrecognizedLine(raw_html=decision.new_html)
+    note.lines[idx] = TableLine(raw_html=decision.new_html)
     return ([DiffChanged(before=old.raw_html, after=decision.new_html)], None)
+
+
+def apply_add_table(
+    note: ParsedNote,
+    decision: DecisionAddTable,
+    rules: Rules,
+) -> tuple[list, str | None]:
+    """Insert a fresh TableLine into the note — added in 0.10.
+
+    If `after_anchor` is empty, append at end. Otherwise, find the line
+    whose searchable text contains the anchor substring and insert the
+    new TableLine immediately after it. NOT_FOUND if no line matches;
+    AMBIGUOUS_BULLET if more than one does.
+
+    Searchable text per line type:
+    - BujoLine / HeadingLine / BodyLine: `text`
+    - TableLine / UnrecognizedLine: `raw_html` (substring match)
+    - BlankLine: never matches (no text)
+    """
+    if not decision.after_anchor.strip():
+        note.lines.append(TableLine(raw_html=decision.new_html))
+        return ([DiffAdded(section="", bullet=decision.new_html)], None)
+
+    needle = decision.after_anchor.strip()
+    matches: list[int] = []
+    for idx, line in enumerate(note.lines):
+        searchable = _line_searchable_text(line)
+        if searchable is not None and needle in searchable:
+            matches.append(idx)
+
+    if not matches:
+        return ([], "NOT_FOUND")
+    if len(matches) > 1:
+        return ([], "AMBIGUOUS_BULLET")
+
+    insert_idx = matches[0] + 1
+    note.lines.insert(insert_idx, TableLine(raw_html=decision.new_html))
+    return ([DiffAdded(section="", bullet=decision.new_html)], None)
+
+
+def _line_searchable_text(line) -> str | None:
+    """Return the searchable text for an `after_anchor` substring match.
+
+    BujoLine/HeadingLine/BodyLine → `text`.
+    TableLine/UnrecognizedLine → `raw_html`.
+    BlankLine → None (never matches).
+    """
+    if isinstance(line, BujoLine):
+        return line.text
+    if isinstance(line, HeadingLine):
+        return line.text
+    if isinstance(line, BodyLine):
+        return line.text
+    if isinstance(line, TableLine):
+        return line.raw_html
+    if isinstance(line, UnrecognizedLine):
+        return line.raw_html
+    return None
 
 
 def apply_reorder(

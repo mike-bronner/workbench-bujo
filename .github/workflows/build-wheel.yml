@@ -31,10 +31,16 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
-    # Don't loop on the workflow's own commits. GitHub also strips the
-    # default `[skip ci]` from triggering, but be explicit — release.yml
-    # bumps and rebuilds in-flight, so we don't want to double-rebuild.
-    if: ${{ !contains(github.event.head_commit.message, 'chore: rebuild wheel') && !contains(github.event.head_commit.message, '[skip ci]') }}
+    # Don't run on workflow-bot commits. Two cases this rules out:
+    #  1. Our own previous run's `chore: rebuild wheel` commit.
+    #  2. release.yml's version-bump commit (it commits the wheel
+    #     in-flight; build-wheel.yml shouldn't double-rebuild and send
+    #     an empty no-op notification).
+    # GitHub honors `[skip ci]` natively but be explicit for safety.
+    if: >-
+      ${{ github.actor != 'github-actions[bot]'
+          && !contains(github.event.head_commit.message, 'chore: rebuild wheel')
+          && !contains(github.event.head_commit.message, '[skip ci]') }}
     steps:
       - name: Checkout main
         uses: actions/checkout@v4

@@ -108,7 +108,7 @@ Mike's monthly note has a habit-tracker table under the Tracker heading. Each co
 
 At session start, if `today` exists, check the tracker for habits due today that haven't been marked done:
 
-1. `bujo_read(notes: ["monthly_current"])` — find the heading `text="Tracker"` and the next `UnrecognizedLine` with `<object><table` in its raw_html.
+1. `bujo_read(notes: ["monthly_current"])` — find the heading `text="Tracker"` and the next line with `kind="table"`. Its `raw_html` field carries the table HTML.
 2. Parse column headers (skip Day + Weekday — habits are columns 3+).
 3. For each habit:
    - Parse cadence from `[<cadence>]`. Default to `daily` if unspecified.
@@ -137,7 +137,7 @@ AskUserQuestion({
 ```
 
 On Yes:
-- Boolean habit → dispatch `bujo_apply_decisions:update_unrecognized` with the table HTML regenerated (today's cell flipped to `✅`). Confirm with one line.
+- Boolean habit → dispatch `bujo_apply_decisions:update_table` with the table HTML regenerated (today's cell flipped to `✅`). Confirm with one line.
 - Quantitative habit → follow up in plain text *"How much?"* → then dispatch with `✅ <n>`.
 
 On No → skip silently. Don't re-prompt the same habit later in the session.

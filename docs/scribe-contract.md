@@ -79,6 +79,11 @@ packet:
       - kind: "body"
         text: "Forward plan for April. Calendar logs events…"
         anchor: "Forward plan for April. Calendar logs events…"
+      # kind: "table" — Apple Notes table; raw_html populated for cell-level access
+      - kind: "table"
+        text: ""
+        anchor: "<object><table"
+        raw_html: '<div><object><table cellspacing="0" cellpadding="0" …>…</table></object><br></div>'
     retrieved_at: "<ISO timestamp>"
 ```
 
@@ -86,20 +91,25 @@ packet:
 - Always implicitly reads `index` (adds it to packet if not requested).
 - Parallel fetches where the MCP permits.
 - Missing notes return `exists: false, lines: null` — not an error.
-- Raw HTML never crosses the wire. The body is parsed via the scribe's parser
-  and three line types cross the wire — `kind: "bujo"`, `kind: "heading"`,
-  `kind: "body"` (≥0.10). Blank rows and `UnrecognizedLine` (tables, embedded
-  objects) are filtered out of `lines[]`. To surface unrecognized content
-  for maintenance, use `scribe.scan` with `filter.status: "unrecognized"`.
+- Four line kinds cross the wire (≥0.10): `kind: "bujo"`, `kind: "heading"`,
+  `kind: "body"`, `kind: "table"`. Tables expose `raw_html` (the only kind
+  that does — for cell-level access). Other kinds expose plain-text via
+  `text`. Blank rows and `UnrecognizedLine` (genuinely unclassified
+  embedded content) are filtered out of `lines[]`. To surface
+  UnrecognizedLine content for cleanup, use `scribe.scan` with
+  `filter.status: "unrecognized"`.
 - The parser is tag-aware (≥0.10): nested `<div>`s inside table cells are
   handled correctly, so the entire `<div><object><table>…</table></object><br></div>`
-  block parses as ONE `UnrecognizedLine` rather than fragmenting.
+  block parses as ONE `TableLine` rather than fragmenting.
 - Apple Notes paragraph styles parse to specific line types (≥0.10):
   - Title (`<h1>` or legacy 24px-span) → extracted into `note.title`
   - Heading (`<h2>` or legacy 18px-span) → `kind: "heading"`, `heading_level: 2`
   - Subheading (`<h3>` or legacy 16px-span) → `kind: "heading"`, `heading_level: 3`
   - Mono (`<tt>` with or without `<font face="Menlo|Courier">` wrapper) →
     `kind: "bujo"` if signifier matches, else `kind: "body"`
+  - Tables (`<div><object><table>…</table></object><br></div>`) → `kind: "table"`
+  - `<object>` blocks WITHOUT a `<table>` inside (attachments, embeds) →
+    UnrecognizedLine (filtered out of `lines[]`)
   - Anything else (italic body, etc.) → `kind: "body"`
 - The renderer emits Apple Notes' native forms (h-tags, `<tt>` without font
   wrapper) regardless of which form the source used. Old notes migrate to
@@ -184,9 +194,15 @@ decisions:
     target_note: "..."   # note that holds the parent
     parent_bullet: "..." # parent bullet on target_note
 
-  - op: update_unrecognized   # ≥0.10 — replace an UnrecognizedLine's raw HTML in place
-    anchor: "<object><table"  # substring that must appear within the line's raw_html
-    new_html: "<full replacement HTML for the line>"
+  - op: update_table          # ≥0.10 — replace a TableLine's raw_html in place
+    anchor: "<object><table"  # substring within the table's raw_html
+    new_html: "<full replacement table HTML>"
+
+  - op: add_table             # ≥0.10 — insert a fresh TableLine
+    after_anchor: "Tracker"   # substring against any line's text/raw_html;
+                              # the new table inserts immediately AFTER the
+                              # matched line. Empty = append at end.
+    new_html: "<full table HTML>"
 ```
 
 **Output:**
@@ -204,7 +220,8 @@ cross_note_effects:                     # e.g. migrate writes to target too
 - `migrate` mutates BOTH notes (strike/mark `>` in source, append to target) — both appear in `cross_note_effects` and the main `diff`.
 - `combine` mutates BOTH notes: source bullet gets `>` (migrated) just like `migrate`, and a new `sub_item` (depth=1) is inserted on `target_note` **immediately after** the `parent_bullet`. Atomic — if `target_note` is missing (`NOT_FOUND`) or `parent_bullet` can't be resolved (`PARENT_NOT_FOUND` / `AMBIGUOUS_PARENT`), the source is NOT mutated and the decision lands in `unmatched`.
 - `undrop` is the inverse of `drop`: clears the `dropped` flag (removes strikethrough), preserves the signifier and text. If the matched line isn't currently dropped, returns `NOT_DROPPED` — not a silent no-op. Use when a task was dropped in error and needs to come back (e.g., the ritual misinterpreted "combine into X" as "drop").
-- `update_unrecognized` (≥0.10) replaces an `UnrecognizedLine`'s `raw_html` in place. Matches by `anchor` substring within the line's raw_html. 0 matches → `NOT_FOUND`; >1 matches → `AMBIGUOUS_BULLET`. Designed for table mutation (the habit tracker on the monthly note); the standard `update` op operates on `BujoLine.text` and can't reach UnrecognizedLine content.
+- `update_table` (≥0.10) replaces a `TableLine`'s `raw_html` in place. Matches by `anchor` substring within the line's raw_html. 0 matches → `NOT_FOUND`; >1 matches → `AMBIGUOUS_BULLET`. Designed for the habit tracker on the monthly note; the standard `update` op operates on `BujoLine.text` and can't reach table content.
+- `add_table` (≥0.10) inserts a fresh `TableLine` into the note. Matches `after_anchor` as a substring against any line's text (BujoLine/HeadingLine/BodyLine) or raw_html (TableLine/UnrecognizedLine). The new table inserts immediately after the matched line. Empty `after_anchor` appends at end. Used to scaffold the habit tracker the first time it's added on a fresh monthly note.
 - Ambiguous matches (bullet text matches >1 bullet) → `AMBIGUOUS_BULLET`, added to `unmatched`. Not applied.
 - Missing bullet matches → `NOT_FOUND`, added to `unmatched`. Not applied.
 

@@ -61,7 +61,7 @@ Find today's row in the table (row index = day-of-month). Replace the cell at th
 bujo_apply_decisions(payload={
   note: "monthly_current",
   decisions: [{
-    op: "update_unrecognized",
+    op: "update_table",
     anchor: "<object><table",
     new_html: "<full regenerated table HTML>"
   }]

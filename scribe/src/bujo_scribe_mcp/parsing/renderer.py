@@ -24,6 +24,7 @@ from bujo_scribe_mcp.parsing.model import (
     HeadingLine,
     Line,
     ParsedNote,
+    TableLine,
     UnrecognizedLine,
 )
 from bujo_scribe_mcp.rules import Rules
@@ -56,6 +57,11 @@ def _render_title(title: str, rules: Rules) -> str:
 def _render_line(line: Line, rules: Rules) -> str:
     if isinstance(line, BlankLine):
         return rules.backends.apple_notes.html.blank_line
+    if isinstance(line, TableLine):
+        # Tables round-trip raw_html exactly — agents that need to
+        # mutate cells regenerate the full HTML and write it back via
+        # the `update_table` op.
+        return line.raw_html
     if isinstance(line, UnrecognizedLine):
         return line.raw_html
     if isinstance(line, HeadingLine):

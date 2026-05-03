@@ -26,6 +26,7 @@ from bujo_scribe_mcp.schemas import (
     ApplyDecisionsOutput,
     CrossNoteEffect,
     DecisionAdd,
+    DecisionAddTable,
     DecisionCombine,
     DecisionComplete,
     DecisionDrop,
@@ -35,7 +36,7 @@ from bujo_scribe_mcp.schemas import (
     DecisionSchedule,
     DecisionUndrop,
     DecisionUpdate,
-    DecisionUpdateUnrecognized,
+    DecisionUpdateTable,
     Diff,
     DiffAdded,
     DiffChanged,
@@ -47,6 +48,7 @@ from bujo_scribe_mcp.tools._matching import find_matches
 from bujo_scribe_mcp.tools._mutations import (
     CrossNoteRequest,
     apply_add,
+    apply_add_table,
     apply_combine,
     apply_complete,
     apply_drop,
@@ -56,7 +58,7 @@ from bujo_scribe_mcp.tools._mutations import (
     apply_schedule,
     apply_undrop,
     apply_update,
-    apply_update_unrecognized,
+    apply_update_table,
 )
 
 
@@ -166,8 +168,11 @@ def _dispatch(
     if isinstance(decision, DecisionRemove):
         diffs, reason = apply_remove(parsed, decision, ctx.rules)
         return diffs, reason, None
-    if isinstance(decision, DecisionUpdateUnrecognized):
-        diffs, reason = apply_update_unrecognized(parsed, decision, ctx.rules)
+    if isinstance(decision, DecisionUpdateTable):
+        diffs, reason = apply_update_table(parsed, decision, ctx.rules)
+        return diffs, reason, None
+    if isinstance(decision, DecisionAddTable):
+        diffs, reason = apply_add_table(parsed, decision, ctx.rules)
         return diffs, reason, None
     if isinstance(decision, DecisionMigrate):
         return apply_migrate(parsed, decision, ctx.rules)

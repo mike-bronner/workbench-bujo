@@ -39,8 +39,12 @@ def test_existing_note_emits_parsed_lines(make_backend, make_context, render_bod
     assert note.lines[2].prefix == "inspiration"
 
 
-def test_response_carries_no_raw_html_field(make_backend, make_context, render_body, make_bujo_line):
-    """Regression guard: the wire DTO must not expose `content` or any HTML."""
+def test_response_carries_no_raw_html_for_non_table_lines(make_backend, make_context, render_body, make_bujo_line):
+    """Regression guard: the wire DTO must not expose top-level `content`,
+    and non-table line kinds (bujo/heading/body) must not carry raw_html.
+
+    Table lines DO carry raw_html (≥0.10) — that's the documented escape
+    hatch for callers that need to read/write table cells."""
     body = render_body("daily", [make_bujo_line("task", "x")])
     ctx = make_context(make_backend({"daily": body}))
 
@@ -48,9 +52,12 @@ def test_response_carries_no_raw_html_field(make_backend, make_context, render_b
     serialized = out.packet["daily"].model_dump()
 
     assert "content" not in serialized
+    # NoteContent itself has no raw_html.
     assert "raw_html" not in serialized
+    # Non-table lines have raw_html=None (or absent if model_dump drops Nones).
     for line in serialized["lines"]:
-        assert "raw_html" not in line
+        if line["kind"] != "table":
+            assert line.get("raw_html") is None
 
 
 def test_dropped_lines_preserve_dropped_flag(make_backend, make_context, render_body, make_bujo_line):
@@ -108,18 +115,17 @@ def test_blank_lines_are_filtered(make_backend, make_context, render_body, make_
 
 
 def test_unrecognized_lines_are_filtered(make_backend, make_context, render_body, make_bujo_line):
-    """UnrecognizedLine (e.g., a table) doesn't appear in `lines[]`. Use
-    `bujo_scan` with `status="unrecognized"` to surface it."""
-    table_html = (
-        "<div><object><table><tbody>"
-        "<tr><td><div>orphan content</div></td></tr>"
-        "</tbody></table></object><br></div>"
+    """UnrecognizedLine (e.g., an embedded `<object>` that's not a table)
+    doesn't appear in `lines[]`. Use `bujo_scan` with `status="unrecognized"`
+    to surface it. Tables go through their own TableLine path (kind=table)."""
+    object_html = (
+        "<div><object><attachment>orphan content</attachment></object><br></div>"
     )
     body = render_body(
         "sample-note",
         [
             make_bujo_line("task", "Real BuJo task"),
-            UnrecognizedLine(raw_html=table_html),
+            UnrecognizedLine(raw_html=object_html),
         ],
     )
     ctx = make_context(make_backend({"sample-note": body}))

@@ -18,6 +18,7 @@ from bujo_scribe_mcp.parsing.model import (
     Line,
     ParsedNote,
     PrefixSignifier,
+    TableLine,
     UnrecognizedLine,
 )
 from bujo_scribe_mcp.parsing.parser import parse_note
@@ -30,6 +31,7 @@ __all__ = [
     "BlankLine",
     "HeadingLine",
     "BodyLine",
+    "TableLine",
     "UnrecognizedLine",
     "Line",
     "ParsedNote",

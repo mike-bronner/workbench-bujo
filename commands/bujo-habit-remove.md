@@ -44,7 +44,7 @@ Parse the table. For every row (header + each date row), drop the cell at the ma
 bujo_apply_decisions(payload={
   note: "monthly_current",
   decisions: [{
-    op: "update_unrecognized",
+    op: "update_table",
     anchor: "<object><table",
     new_html: "<full regenerated table HTML, minus the column>"
   }]

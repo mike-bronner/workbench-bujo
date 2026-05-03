@@ -26,6 +26,7 @@ from bujo_scribe_mcp.parsing.model import (
     HeadingLine,
     Line,
     ParsedNote,
+    TableLine,
     UnrecognizedLine,
 )
 from bujo_scribe_mcp.rules import Rules
@@ -89,9 +90,12 @@ _MONOSPACE_INNER_RE = re.compile(
 # The <s>...</s> wrapper for dropped tasks.
 _STRIKETHROUGH_RE = re.compile(r"<s\b[^>]*>(.*?)</s>", re.IGNORECASE | re.DOTALL)
 
-# Detect tables/objects — these stay as UnrecognizedLine for raw_html
-# preservation (and for the new update_unrecognized op).
-_TABLE_RE = re.compile(r"<(?:table|object)\b", re.IGNORECASE)
+# Detect Apple Notes tables. Apple Notes wraps tables in <object>, but
+# the <table> tag is the load-bearing marker — match on that. Objects
+# WITHOUT <table> inside (e.g., file attachments, embedded media) are
+# distinct structured content and stay as UnrecognizedLine.
+_TABLE_RE = re.compile(r"<table\b", re.IGNORECASE)
+_OBJECT_RE = re.compile(r"<object\b", re.IGNORECASE)
 
 
 # ---------------------------------------------------------------------------
@@ -320,10 +324,20 @@ def _parse_div(
         level, text = heading
         return HeadingLine(text=text, level=level, raw_html=raw_html)
 
-    # Tables and other <object>-wrapped structures stay as UnrecognizedLine
-    # so the raw_html survives round-trip and the new update_unrecognized
-    # op can mutate them. We check this BEFORE the body-line catch-all.
+    # Apple Notes tables become TableLine — a recognized type that
+    # preserves raw_html for round-trip. The agent mutates tables via
+    # the `update_table` / `add_table` decision ops. We check this
+    # BEFORE the body-line catch-all so tables don't accidentally
+    # classify as body lines.
     if _TABLE_RE.search(inner_html):
+        return TableLine(raw_html=raw_html)
+
+    # `<object>` WITHOUT a `<table>` inside — Apple Notes uses <object>
+    # for embedded attachments, media, and other structured content
+    # that's not a table. We don't have a structured type for these
+    # yet, so preserve as UnrecognizedLine. Use `bujo_scan` with
+    # `status="unrecognized"` to surface them for cleanup.
+    if _OBJECT_RE.search(inner_html):
         return UnrecognizedLine(raw_html=raw_html)
 
     # Unwrap the monospace wrapper if present (font-wrap optional ≥0.10).
