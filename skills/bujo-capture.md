@@ -80,9 +80,17 @@ mcp__plugin_workbench-bujo_scribe__bujo_scaffold(payload={
 
 Then dispatch the add.
 
-## Interaction pattern
+## Interaction pattern (three tiers)
 
-**Proactive (always via `AskUserQuestion`, yes/no):** when Hobbes notices something potentially capture-worthy, propose it via `AskUserQuestion` with the proposed bullet text in the question and TWO options only — yes or no:
+**Tier 1 — Silent capture (explicit phrasing):** Mike named a completion / decision / event / shipped artifact in his own words. Examples: *"I shipped X"*, *"decided to Y"*, *"had a 1:1 with Z"*, *"finished the migration"*, *"Y is done"*. He gave the signal — dispatch immediately:
+
+```
+mcp__plugin_workbench-bujo_scribe__bujo_apply_decisions:add  // or :complete if matching an open task
+```
+
+Confirm with one line: *"🪶 Logged: <bullet>"*. Mike can correct via natural language ("drop that", "rename to …") if the wording was wrong — that's cheaper than an interrupting prompt.
+
+**Tier 2 — Propose via `AskUserQuestion` (inferred / ambiguous):** Hobbes notices something potentially capture-worthy that Mike *didn't* explicitly name — a realization that emerged, a possible pivot, a breakthrough, a frustration with stakes. Propose with the proposed bullet text and TWO options only — yes or no:
 
 ```jsonc
 AskUserQuestion({
@@ -98,12 +106,12 @@ AskUserQuestion({
 })
 ```
 
-On **Yes** → dispatch the `bujo_apply_decisions:add` (or `:schedule` for future-dated). Confirm with one line: *"🪶 Logged."*
+On **Yes** → dispatch `bujo_apply_decisions:add` (or `:schedule` for future-dated). Confirm one line.
 On **No** → skip silently. Don't paraphrase and re-offer the same moment.
 
-**No silent auto-capture.** Even unambiguous moments (just shipped a release, named a clear decision) go through this prompt. Triage is the agent's job; the decision to log is Mike's. The journal stays sparse because every entry is actively chosen.
+**No "edit wording" option.** The question wording IS the bullet. If it's wrong, Mike says no and the agent does better next time (or runs `/bujo-capture <correct text>`).
 
-**No "edit wording" option.** The wording in the question IS what lands on yes. If the wording is wrong, Mike says no and the agent does better next time (or runs `/bujo-capture <correct text>` manually). A three-button prompt becomes a small editing exercise; two buttons keep the friction low.
+**Tier 3 — Skip silently:** routine code edits, command runs, file lookups, trivial completions ("installed deps", "fixed typo"), thinking-aloud that hasn't crystallized. Don't propose, don't dispatch.
 
 **Manual via slash command:** Mike invokes `/workbench-bujo:bujo-capture <text>` directly. Dispatch without asking — he already decided.
 
@@ -118,8 +126,8 @@ The user's "no, no, no" is a clear signal that the conversation is in flow that 
 1. **Signal-to-noise ratio is sacred.** Over-capturing makes the journal useless. Under-capture if uncertain.
 2. **Single line.** Multi-line captures belong in a ritual reflection, not mid-conversation.
 3. **Mike's voice, not yours.** Write the capture as a neutral observation or in Mike's words. Never editorialize or add your own interpretation.
-4. **Always propose via `AskUserQuestion` with yes/no.** No silent auto-dispatch (even for "obvious" moments). No edit-wording option (yes/no only). No retrying after a no on the same moment. Manual `/bujo-capture` is the only path that dispatches without proposing.
-5. **Never capture private/embarrassing content** without asking — and even ask-and-yes shouldn't go in if the moment is raw.
+4. **Tier the consent.** Explicit-phrasing captures dispatch silently with a one-line ack. Inferred / ambiguous captures go through `AskUserQuestion` (yes/no, no edit option, no retry on the same moment). Routine ops are skipped silently. Manual `/bujo-capture` always dispatches.
+5. **Never capture private / embarrassing content** without asking, even when the phrasing seems explicit. Sensitive moments default to tier 2 (propose) or skip — and a yes-to-propose still shouldn't go in if the moment is raw.
 6. **Respect the day's scaffold.** If today isn't scaffolded yet, scaffold a minimal one; don't refuse to capture.
 7. **Setup-time ordering does not apply to captures.** Mid-day additions append chronologically — the MCP's `mode: merge` handles that correctly.
-8. **Self-throttle after 3 consecutive nos.** Stop proposing for the session.
+8. **Self-throttle after 3 consecutive nos** (tier-2 only). Stop proposing for the session. Tier-1 silent captures continue; Mike corrects individual ones via natural language ("drop that") if needed.

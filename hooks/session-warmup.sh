@@ -39,11 +39,17 @@ The `workbench-bujo` plugin is active. Mike's bullet journal lives in Apple Note
 
 ## Proactive capture — be the day's scribe
 
-Beyond reactive routing on phrasings: **across every session, watch for genuinely capture-worthy moments and propose them to Mike via `AskUserQuestion`.** The journal becomes a highlight reel — but only of moments Mike confirms are interesting. Triage is the agent's job; the decision to log is Mike's.
+Beyond reactive routing: **across every session, capture genuinely meaningful moments to today's note as they happen.** The journal becomes a sparse, signal-rich highlight reel. The per-turn `UserPromptSubmit` nudge reinforces this between turns — the rules below are the canonical reference.
 
-### How to propose (always `AskUserQuestion`, never silent dispatch)
+### Three tiers (categorize every user message)
 
-For any moment that might be capture-worthy, propose via `AskUserQuestion` with the proposed bullet text in the question and **two options only**: yes or no. The wording in the question IS the bullet that lands on yes — there's no edit option. If the wording is wrong, Mike says no and the agent does better next time (or Mike runs `/bujo-capture` manually with the right text).
+**1. Silent capture — explicit phrasing names a completion / decision / event / shipped artifact.**
+Mike said it as fact. Examples: *"I shipped v0.10.2"*, *"decided to go with Postgres"*, *"had a 1:1 with Sarah about hiring"*, *"finished the migration"*, *"Y is done"*.
+→ Dispatch `bujo_apply_decisions:add` (or `:complete` if it matches an open task). Confirm in one line: *"🪶 Logged: <bullet>"*. **No `AskUserQuestion`** — Mike already gave the signal. He can correct via natural language ("drop that") if the wording was wrong.
+
+**2. Propose via `AskUserQuestion` — inferred capture-worthiness, ambiguous.**
+Mike voiced something that might be a journal-worthy moment but didn't name it as one. Examples: a realization that emerged from work together, a possible pivot, a breakthrough that's not yet stated as a decision, a frustration with potential stakes, a future-dated task implied.
+→ `AskUserQuestion` with **two options only** (yes / no). The wording IS the bullet — no edit option. On yes → dispatch + ack. On no → drop silently, don't paraphrase and re-offer.
 
 ```jsonc
 AskUserQuestion({
@@ -59,48 +65,20 @@ AskUserQuestion({
 })
 ```
 
-On **Yes** → dispatch `bujo_apply_decisions:add` immediately. Confirm with one line: *"🪶 Logged."*
-On **No** → skip silently, do not retry, do not paraphrase and re-offer.
-
-**No silent auto-capture.** Even unambiguous moments (just shipped a release, named a clear decision) go through this prompt. The point is for Mike to keep the journal sparse — every entry should be one he actively picked.
-
-### What to propose (triage candidates)
-
-- Concrete completions Mike just announced ("I shipped X", "Y is done")
-- Work the agent just completed at Mike's direction that produced a real artifact (release, PR merge, deployment)
-- Decisions Mike named explicitly ("decided to X", "going with Y")
-- Insights/realizations Mike voiced ("I realized X", "the insight is…")
-- Real-world events Mike mentioned ("had a 1:1 with Y about Z")
-- Pivots or approach-changes that might be capture-worthy
-- Frustrations or breakthroughs with potential stakes
-- Future-dated tasks Mike implied (also offer to schedule to Future Log)
-
-### Skip silently — never propose
-
-- Routine code edits, file changes, command runs
-- Trivial completions ("installed deps", "fixed typo", "ran tests")
-- Anything reconstructable from git history or tool transcripts
-- Thinking-aloud that hasn't crystallized
-- Work-in-progress checkpoints that haven't landed
+**3. Skip silently — routine / trivial / reconstructable.**
+Code edits, command runs, file lookups, "installed deps", "fixed typo", thinking-aloud that hasn't crystallized, work-in-progress checkpoints. Anything reconstructable from git history or tool transcripts. Don't propose, don't dispatch.
 
 ### Self-throttle on rejection
 
-If Mike says **No** to **3 or more consecutive capture proposals** in a session, the agent's threshold is too eager. Stop proposing for the rest of the session and acknowledge it once: *"Got it — I'll stop proposing captures this session. Run `/bujo-capture <text>` if something specific comes up."*
+3+ consecutive `AskUserQuestion` nos in a session → stop proposing for the rest of the session and acknowledge once: *"Got it — I'll stop proposing captures this session. Run `/bujo-capture <text>` if something specific comes up."* The throttle applies only to tier-2 proposals; tier-1 silent captures continue (Mike can correct individual ones via "drop that").
 
-This self-correction prevents the failure mode where the agent floods the conversation with prompts that Mike doesn't want.
+### Threshold dial
 
-### Trial threshold — adjustable
+Calibrated to err toward fewer-but-stronger captures. Mike adjusts mid-session via natural language: *"be more selective with captures"* moves triggers from tier-1/tier-2 toward skip; *"capture more eagerly"* loosens the bar. Carry the adjustment forward in the same session.
 
-This is calibrated to err on the side of *fewer prompts, higher signal* — better to miss a capture than to bury Mike in offers. If the trial feels:
+### Where this runs
 
-- **Too eager** (asking about routine stuff): Mike says *"be more selective with captures"* → agent moves more triggers from "propose" to "skip silently."
-- **Too quiet** (missing things Mike cared about): Mike says *"propose captures more eagerly"* → agent loosens the bar.
-
-The dial exists. Mike turns it via natural-language feedback during sessions; the agent carries that adjustment forward in the same session.
-
-### Cross-Claude
-
-Proactive capture runs wherever this plugin loads — Claude Code and Claude Cowork (both local Mac features of the Claude desktop app). Claude Chat doesn't run plugins, so captures don't happen from there.
+Plugin-loading clients only — Claude Code and Claude Cowork (Mac desktop app). Claude Chat doesn't run plugins; captures from there are out of scope.
 
 ## Habit tracker (≥0.10) — surface what's due today
 
@@ -152,7 +130,7 @@ Self-throttle: same as proactive capture — 3+ consecutive nos this session →
 
 1. **Never invent a task list in memory.** If Mike mentions work to do, it belongs in the journal.
 2. **Always pre-warm the scribe.** If the deferred tool list shows `mcp__plugin_workbench-bujo_scribe__*`, load schemas via `ToolSearch(query="select:mcp__plugin_workbench-bujo_scribe__bujo_read,...")` before first use. The MCP may take ~10s to boot — retry with brief sleeps before concluding it's offline.
-3. **Reactive routing dispatches without confirmation; proactive capture always asks via `AskUserQuestion`.** Two different rules for two different paths: (a) when Mike says something matching the trigger vocabulary table above, route directly without re-asking — he gave the instruction. (b) When the agent notices something potentially capture-worthy outside an explicit instruction, propose via `AskUserQuestion` (yes/no), never silently dispatch. See Proactive Capture above.
+3. **Three capture tiers, not one.** (a) Reactive-routing matches and explicit-phrasing captures dispatch silently — Mike gave the signal. (b) Inferred / ambiguous capture-worthy moments go through `AskUserQuestion` (yes/no). (c) Routine code / file / lookup ops are skipped silently. See *Proactive capture* above for the categorization rule.
 4. **Single items don't need the `/bujo` ritual.** Just dispatch one `add` (or capture) decision and confirm the diff in one line. The ritual is for periodic reflection (daily/weekly/etc.), not capture.
 5. **Respect existing signifiers and prefixes.** Priority (`✽`), inspiration (`!`), and explore (`◉`) are Mike's — inherit his choice if he mentions it, don't impose one.
 6. **Signal-to-noise is sacred.** Better to under-capture than to flood the log. The "skip silently" list above is the floor; everything trivial stays out.
