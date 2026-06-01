@@ -16,6 +16,65 @@ set -u
 # Idempotent — if Notes is already running, this is a no-op.
 ( osascript -e 'tell application "Notes" to launch' >/dev/null 2>&1 & ) &
 
+# ---------------------------------------------------------------------------
+# Version-drift warning. The desktop app can keep serving a stale plugin
+# bundle while the CLI plugin cache is already current
+# (anthropics/claude-code#45810) — the scribe MCP then silently runs an old
+# version against the live journal. Surface it loudly at warmup.
+#
+# Best-effort and dependency-free: extract versions with sed (no jq — the
+# hook PATH is narrow under Cowork), compare numerically with BSD `sort`
+# (no GNU-only `-V`), and stay silent on any missing input. Fires only when
+# the running bundle is STRICTLY behind the newest version in the CLI cache.
+# A Cowork-only setup with no CLI cache has nothing to compare against, so
+# the check no-ops there.
+# ---------------------------------------------------------------------------
+
+_bujo_plugin_version() {
+  # Echo the "version" field from a plugin.json, or nothing.
+  [ -f "$1" ] || return 1
+  sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$1" | head -n 1
+}
+
+_bujo_newest_cached_version() {
+  # Echo the highest semver dir name under the CLI plugin cache, or nothing.
+  local cache_dir="$HOME/.claude/plugins/cache/claude-workbench/workbench-bujo"
+  [ -d "$cache_dir" ] || return 1
+  ls -1 "$cache_dir" 2>/dev/null \
+    | grep -E '^[0-9]+\.[0-9]+\.[0-9]+$' \
+    | sort -t. -k1,1n -k2,2n -k3,3n \
+    | tail -n 1
+}
+
+_bujo_version_lt() {
+  # True (0) iff $1 is strictly lower than $2 (both X.Y.Z).
+  [ "$1" = "$2" ] && return 1
+  [ "$(printf '%s\n%s\n' "$1" "$2" | sort -t. -k1,1n -k2,2n -k3,3n | head -n 1)" = "$1" ]
+}
+
+_bujo_emit_drift_warning() {
+  local root="${CLAUDE_PLUGIN_ROOT:-}"
+  [ -n "$root" ] || return 0
+  local bundle newest
+  bundle=$(_bujo_plugin_version "$root/.claude-plugin/plugin.json") || return 0
+  [ -n "$bundle" ] || return 0
+  newest=$(_bujo_newest_cached_version) || return 0
+  [ -n "$newest" ] || return 0
+  _bujo_version_lt "$bundle" "$newest" || return 0
+  cat <<DRIFT
+# ⚠️ BuJo plugin version drift — running v${bundle}, v${newest} available
+
+The active **workbench-bujo** bundle is **v${bundle}**, but **v${newest}** is installed in your CLI plugin cache. The desktop app may be serving a stale plugin (known issue — anthropics/claude-code#45810), which silently routes the scribe MCP to outdated code against your live journal.
+
+**Realign:** run \`claude plugin marketplace update claude-workbench\` in a terminal, then fully quit (Cmd-Q) and relaunch the desktop app. This warning clears once the running bundle matches the cache.
+
+---
+
+DRIFT
+}
+
+_bujo_emit_drift_warning
+
 cat <<'EOF'
 # 📓 BuJo routing
 
