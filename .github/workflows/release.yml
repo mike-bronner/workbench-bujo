@@ -159,15 +159,15 @@ jobs:
             --title "v${NEW_VERSION} — ${DESC}" \
             --notes "## What changed
 
-${DESC}
+          ${DESC}
 
-${COMPARE}
+          ${COMPARE}
 
-## Bundled wheel
+          ## Bundled wheel
 
-\`scribe/wheels/bujo_scribe_mcp-${NEW_VERSION}-py3-none-any.whl\` ships in the plugin tree. The launcher (\`scribe/bin/launcher.sh\`) installs it into a per-plugin stable venv on first run, then exec's the binary directly — no \`uv run\` overhead per session.
+          \`scribe/wheels/bujo_scribe_mcp-${NEW_VERSION}-py3-none-any.whl\` ships in the plugin tree. The launcher (\`scribe/bin/launcher.sh\`) installs it into a per-plugin stable venv on first run, then exec's the binary directly — no \`uv run\` overhead per session.
 
-## Auto-pin
+          ## Auto-pin
 
-\`update-marketplace-sha.yml\` will fire on this release event and pin v${NEW_VERSION}'s commit SHA in the workbench marketplace." \
+          \`update-marketplace-sha.yml\` will fire on this release event and pin v${NEW_VERSION}'s commit SHA in the workbench marketplace." \
             "scribe/wheels/bujo_scribe_mcp-${NEW_VERSION}-py3-none-any.whl"
