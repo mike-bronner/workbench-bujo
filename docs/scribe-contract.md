@@ -1,8 +1,8 @@
 # 🖋️ bujo-scribe — Contract
 
-The scribe is a sub-agent dispatched by Hobbes during BuJo rituals. It owns every Apple Notes read/write, every formatting decision, every carry-over and migration. Hobbes owns orchestration and interactivity with Mike; the scribe owns the notebook.
+The scribe is a sub-agent dispatched by Holmes during BuJo rituals. It owns every Apple Notes read/write, every formatting decision, every carry-over and migration. Holmes owns orchestration and interactivity with Mike; the scribe owns the notebook.
 
-This document defines the **contract between Hobbes and the scribe** — the verbs, inputs, outputs, and invariants. If a ritual skill needs the scribe to do something outside this vocabulary, **extend the contract first** — don't have the skill invent a new verb inline.
+This document defines the **contract between Holmes and the scribe** — the verbs, inputs, outputs, and invariants. If a ritual skill needs the scribe to do something outside this vocabulary, **extend the contract first** — don't have the skill invent a new verb inline.
 
 ---
 
@@ -12,7 +12,7 @@ This document defines the **contract between Hobbes and the scribe** — the ver
 2. **Folder discipline.** All BuJo notes live in the `📓 Journal` folder (notebook emoji included). Every `add_note` passes `folder: "📓 Journal"`. If the folder is missing → error `FOLDER_MISSING`.
 3. **Parallel-edit guard.** Every mutation does `get_note_content` immediately before `update_note_content`. No stale writes.
    - **Cross-process serialization (≥0.9.0):** mutations also acquire a `flock(2)`-based advisory lock on `${SCRIBE_RUN_DIR}/mutation.lock` for the duration of the read→mutate→write critical section. This serializes mutations across multiple Claude Code sessions running concurrently — without it, two scribe processes can both pass their local guard while still racing each other to clobber the same Apple Notes record. The lock file lives inside the plugin tree (set by `BUJO_SCRIBE_RUN_DIR`); the OS releases the lock automatically on process exit, so abandoned locks never strand the system, and plugin uninstall removes the file with the rest of the plugin.
-4. **Verified diffs.** Every mutation verb returns a structured diff — Hobbes can present it to Mike, not a black-box "ok".
+4. **Verified diffs.** Every mutation verb returns a structured diff — Holmes can present it to Mike, not a black-box "ok".
 5. **No improvisation.** If a bullet doesn't match an index rule, the scribe returns a `RULE_VIOLATION` warning — it does not guess.
 6. **Tz-aware.** Dates computed in `America/Phoenix` unless overridden.
 
@@ -254,7 +254,7 @@ items:
 **Behavior:**
 - Read-only.
 - Uses index rules to classify what "open" means.
-- `anchor` is a string Hobbes can pass back in a subsequent `apply-decisions` as the `bullet` field — stable across re-reads.
+- `anchor` is a string Holmes can pass back in a subsequent `apply-decisions` as the `bullet` field — stable across re-reads.
 - `status: "unrecognized"` returns every non-BuJo div in scope as a ScanItem
   with `signifier: "unrecognized"`. The `text`/`anchor` is the de-tagged
   HTML of the div, which round-trips into `apply_decisions:remove` for
@@ -363,16 +363,16 @@ All launcher state lives inside the plugin tree (`.venv-stable/`, `run/`, `wheel
 
 ## What the scribe does NOT do
 
-- **No interactivity.** Does not ask Mike questions. If a decision is ambiguous, it returns `unmatched`; Hobbes resolves with Mike and re-dispatches.
-- **No ritual orchestration.** Does not decide whether it's a Sunday. Hobbes decides; scribe executes what's asked.
+- **No interactivity.** Does not ask Mike questions. If a decision is ambiguous, it returns `unmatched`; Holmes resolves with Mike and re-dispatches.
+- **No ritual orchestration.** Does not decide whether it's a Sunday. Holmes decides; scribe executes what's asked.
 - **No rule invention.** If the index doesn't specify it, the scribe does not choose a default. Returns `RULE_VIOLATION` instead.
-- **No summarization of user reflection.** Mike's reflections in Step 4 / Step 8 are for Hobbes to capture. The scribe only applies the resulting decisions.
+- **No summarization of user reflection.** Mike's reflections in Step 4 / Step 8 are for Holmes to capture. The scribe only applies the resulting decisions.
 
 ---
 
 ## Open questions (to resolve before building)
 
-- [ ] Does `apply-decisions` need a `dry_run: true` option, so Hobbes can preview the diff before committing? (Probably yes — useful for Step 4 batch applies.)
+- [ ] Does `apply-decisions` need a `dry_run: true` option, so Holmes can preview the diff before committing? (Probably yes — useful for Step 4 batch applies.)
 - [ ] Should `scaffold` accept a `prepend_to_section` hint, or is section order always index-determined?
 - [ ] Anchor format for `scan` → `apply-decisions` round-trip. Proposal: `"<section_name>::<first_40_chars_of_bullet>"`. Good enough?
 - [ ] Does the `📓 Journal Index` currently cover every rule the scribe will need? (Step 2 of the build plan — audit the index before we trust it.)

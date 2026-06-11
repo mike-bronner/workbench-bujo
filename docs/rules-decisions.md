@@ -1,6 +1,6 @@
 # 📐 BuJo Rules — Gap Decisions
 
-Working log of the decisions Mike and Hobbes make while closing the 7 audit gaps. Once all gaps are resolved, these decisions become the default `rules.yaml` shipped with `bujo-scribe-mcp`.
+Working log of the decisions Mike and Holmes make while closing the 7 audit gaps. Once all gaps are resolved, these decisions become the default `rules.yaml` shipped with `bujo-scribe-mcp`.
 
 ---
 

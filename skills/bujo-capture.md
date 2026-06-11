@@ -1,14 +1,14 @@
 ---
-description: Capture an experientially-significant moment to today's BuJo daily log, mid-conversation, without running a full ritual. Invoked proactively by Hobbes when something noteworthy happens in a session, OR manually via the /workbench-bujo:bujo-capture command.
+description: Capture an experientially-significant moment to today's BuJo daily log, mid-conversation, without running a full ritual. Invoked proactively by Holmes when something noteworthy happens in a session, OR manually via the /workbench-bujo:bujo-capture command.
 ---
 
 # BuJo Capture — Experiential Logging
 
-Mid-conversation logging for experientially-significant moments that happen outside ritual time. A BuJo Daily Log is meant to be **lived in**, not just retrospectively filled at ritual time — Ryder Carroll's Rapid Logging principle. This skill is how Hobbes (or Mike) drops a meaningful moment into today's log as it happens.
+Mid-conversation logging for experientially-significant moments that happen outside ritual time. A BuJo Daily Log is meant to be **lived in**, not just retrospectively filled at ritual time — Ryder Carroll's Rapid Logging principle. This skill is how Holmes (or Mike) drops a meaningful moment into today's log as it happens.
 
 ## When to invoke proactively
 
-As Hobbes, watch for **experientially significant** moments during any session (coding, conversation, work, whatever Mike is doing) and invoke this skill when one lands. The signal is:
+As Holmes, watch for **experientially significant** moments during any session (coding, conversation, work, whatever Mike is doing) and invoke this skill when one lands. The signal is:
 
 **✅ Capture-worthy:**
 - 💡 A realization, insight, or "aha" Mike voices or that emerges from work together
@@ -90,7 +90,7 @@ mcp__plugin_workbench-bujo_scribe__bujo_apply_decisions:add  // or :complete if 
 
 Confirm with one line: *"🪶 Logged: <bullet>"*. Mike can correct via natural language ("drop that", "rename to …") if the wording was wrong — that's cheaper than an interrupting prompt.
 
-**Tier 2 — Propose via `AskUserQuestion` (inferred / ambiguous):** Hobbes notices something potentially capture-worthy that Mike *didn't* explicitly name — a realization that emerged, a possible pivot, a breakthrough, a frustration with stakes. Propose with the proposed bullet text and TWO options only — yes or no:
+**Tier 2 — Propose via `AskUserQuestion` (inferred / ambiguous):** Holmes notices something potentially capture-worthy that Mike *didn't* explicitly name — a realization that emerged, a possible pivot, a breakthrough, a frustration with stakes. Propose with the proposed bullet text and TWO options only — yes or no:
 
 ```jsonc
 AskUserQuestion({

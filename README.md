@@ -25,7 +25,7 @@ Every ritual is interactive: it prompts for reflection, waits for real answers, 
                       └────────────┬─────────────┘
                                    │ plan
                                    ▼
-      You  ↔  Hobbes (main)  ◁──── drives interactive ritual protocol
+      You  ↔  Holmes (main)  ◁──── drives interactive ritual protocol
               │                    (check-in, item review, reflection,
               │                     scaffold, planning)
               │
@@ -117,7 +117,7 @@ Walks configuration, deploys the single scheduled task, offers legacy cleanup.
 | `/workbench-bujo:bujo-monthly-ritual` | Ad-hoc monthly only. |
 | `/workbench-bujo:bujo-yearly-ritual` | Ad-hoc yearly only. |
 
-Hobbes also **proactively** invokes the capture skill when he notices a significant moment during conversation — a realization, a meaningful decision, a breakthrough, an emotionally-notable beat. He checks with you before logging ("Worth capturing: … Adding to today?"). Routine tool calls and small code edits are filtered out.
+Holmes also **proactively** invokes the capture skill when he notices a significant moment during conversation — a realization, a meaningful decision, a breakthrough, an emotionally-notable beat. He checks with you before logging ("Worth capturing: … Adding to today?"). Routine tool calls and small code edits are filtered out.
 
 ## Ritual schedule
 
@@ -148,7 +148,7 @@ Weekly is deliberately lighter — it's a BuJo community extension (not in Ryder
 
 Every tier follows the same six steps — the mode matrix above dictates which steps are full vs. skipped.
 
-1. **Read scope** — orchestrator tells Hobbes which notes to fetch (`yesterday`, last week's dailies, last month's dailies, last year's monthlies).
+1. **Read scope** — orchestrator tells Holmes which notes to fetch (`yesterday`, last week's dailies, last month's dailies, last year's monthlies).
 2. **Check-in + capture missing** *(full tiers only)* — "How did [period] go? And anything you want to add?" Both the reflection on how the period landed AND late-arriving captures fold into a single step.
 3. **Item-by-item review** — every unfinished or dropped item from the scope gets inspected individually. **No batching.** Full tiers probe for feelings and meaning; weekly is disposition-only (carry / drop / schedule / complete).
 4. **Scaffold the new period** — create today/this-week/this-month/this-year entry with migrated items, events, Future Log surfaces. For **yearly**, a Future Log rollover step follows — stale entries get walked with you and migrated/dropped.
@@ -159,9 +159,9 @@ Every tier follows the same six steps — the mode matrix above dictates which s
 
 Reflection isn't about completing a task-review checklist. It's about *processing experiences* — noticing what carried weight, surfacing feelings (when they're there), tracing what they point at, and deciding what to do with that.
 
-The orchestrator does **experience identification** before Hobbes talks to you: it reads the scoped notes and picks out salient items (insights, completed-after-friction, migrated 3+ times, dropped items, pattern shifts) plus cross-references calendar events for **gaps** — things that happened but weren't captured. It returns these as `reflection_focus` with neutral opener questions ("what opened up for you?" / "anything to say about this?").
+The orchestrator does **experience identification** before Holmes talks to you: it reads the scoped notes and picks out salient items (insights, completed-after-friction, migrated 3+ times, dropped items, pattern shifts) plus cross-references calendar events for **gaps** — things that happened but weren't captured. It returns these as `reflection_focus` with neutral opener questions ("what opened up for you?" / "anything to say about this?").
 
-During the ritual, Hobbes uses those openers. If you respond with feelings, he digs. If you respond factually and move on, he accepts that. **"No feeling here" is a complete and respected answer** — feelings aren't forced.
+During the ritual, Holmes uses those openers. If you respond with feelings, he digs. If you respond factually and move on, he accepts that. **"No feeling here" is a complete and respected answer** — feelings aren't forced.
 
 ## Configuration
 
@@ -245,7 +245,7 @@ The plugin defines the *process* (when to run, what steps to follow). BuJo *rule
 - **Friction for every item.** Every unfinished or dropped item gets individually inspected. Ryder's "friction of reconsideration" principle — digital version. No batching.
 - **Mechanical work is offloaded.** Apple Notes reads/writes, BuJo formatting, migration logic — all owned by the scribe MCP. The plugin's skills orchestrate; they don't format.
 - **Write prescriptive, read lenient.** The scribe emits one canonical HTML form; it tolerates Apple Notes' variations on read. See [`docs/apple-notes-quirks.md`](https://github.com/mike-bronner/bujo-scribe-mcp/blob/main/docs/apple-notes-quirks.md) for quirks and mitigations.
-- **Live in the Daily Log.** Rapid Logging is a core BuJo principle — you're meant to capture meaningful moments throughout the day, not just at ritual time. Hobbes assists by proactively noticing and asking to log experientially-significant moments mid-conversation.
+- **Live in the Daily Log.** Rapid Logging is a core BuJo principle — you're meant to capture meaningful moments throughout the day, not just at ritual time. Holmes assists by proactively noticing and asking to log experientially-significant moments mid-conversation.
 
 ## Further reading
 
