@@ -25,6 +25,7 @@ on:
 
 permissions:
   contents: write
+  actions: write
 
 concurrency:
   group: release
@@ -171,3 +172,14 @@ jobs:
 
           \`update-marketplace-sha.yml\` will fire on this release event and pin v${NEW_VERSION}'s commit SHA in the workbench marketplace." \
             "scribe/wheels/bujo_scribe_mcp-${NEW_VERSION}-py3-none-any.whl"
+
+      # Releases created with GITHUB_TOKEN emit sterile events — they do NOT
+      # trigger the on-release marketplace pin (GitHub anti-recursion rule).
+      # Chain it explicitly; API-dispatched workflow_dispatch is exempt.
+      - name: Trigger marketplace SHA pin
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NEW_VERSION: ${{ inputs.version }}
+        run: |
+          gh workflow run update-marketplace-sha.yml \
+            -R "${GITHUB_REPOSITORY}" -f tag="v${NEW_VERSION}"
