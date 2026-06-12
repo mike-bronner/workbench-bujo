@@ -109,6 +109,7 @@ The orchestrator's plan (YAML with `kind`, `options`, `reflection_focus`, etc.) 
 
 At the start of each major step, call `mcp__ccd_session__mark_chapter` with a short noun-phrase title:
 
+- Step 1.5: `"Harvest"` (daily tier only)
 - Step 2: `"Check-in"`
 - Step 3: `"Review"` (or `"Disposition"` for weekly light-mode)
 - Step 4: `"Scaffold [tier]"` (e.g., `"Scaffold today"`, `"Scaffold month"`)
@@ -180,6 +181,26 @@ When the orchestrator's `recorded_experiences` references an item, verify its `i
 This rule applies everywhere in the ritual — never claim an item, count, or status that you can't point to in `lines[]` (or in `bujo_scan` output for Step 3).
 
 Keep the parsed lines available as you run the rest of the ritual.
+
+## Step 1.5 — Harvest yesterday (daily tier only)
+
+**Chapter mark at start:** `mcp__ccd_session__mark_chapter(title="Harvest")`.
+
+**Skip this step entirely for weekly, monthly, and yearly tiers.** Harvest is daily-cadence: it backfills *yesterday's* note from yesterday's session records — things that happened in Claude sessions during the day but never got captured to the journal.
+
+### Flow
+
+1. **Resolve the memory vault.** Read the workbench-core config at `~/.claude/plugins/data/workbench-core-*/config.json` and take its `memory_path` key (currently `/Users/mike/Documents/Claude/Memory`). Session summaries live at `<memory_path>/sessions/<YYYY-MM-DD>/*.summary.md` — read yesterday's date directory.
+2. **Read yesterday's summaries.** Prefer the workbench-memory MCP when its tools are available; fall back to reading the summary files directly from disk.
+3. **Distill high-signal items only**: shipped artifacts, decisions made, events that happened, completions. Routine code edits, lookups, and in-progress noise stay out — the same signal bar as any capture.
+4. **De-duplicate against yesterday's `lines[]`** (from Step 1). Anything already on yesterday's note — captured mid-day or planned and completed there — is NOT harvested again. Only genuine gaps backfill.
+5. **Backfill onto YESTERDAY's note** via `bujo_apply_decisions:add` — note `"yesterday"`, never today. Completed work lands as `×` (completed), decisions/insights as `—`/`!—` notes, events as `○`. **Set the Bullet `source` field on every harvested bullet** (e.g., `source: "sessions/2026-06-11/abc123.summary.md"`) — that provenance is what authorizes the write (see hard rule 7).
+6. **Still-open work harvests as `task` bullets** (`•`, signifier `task`). Don't dispose of them here — Step 3's disposition machinery walks every open item on yesterday and migrates what carries to today.
+7. **Hold the harvested list for Step 2.** Present the backfilled bullets at the start of the check-in ("From yesterday's sessions I backfilled: … — anything to correct or add?") so Mike can discuss, reword, or drop any of them as part of the reflection.
+
+### Failure mode — skip, never fail
+
+If the workbench-core config, the vault, or yesterday's `sessions/` directory is missing (or contains no summaries), say so in one line ("No session records to harvest — moving on.") and continue to Step 2. The harvest is best-effort; its absence must never block or fail the ritual.
 
 ## Step 2 — Check-in + capture missing (INTERACTIVE — full tiers only)
 
@@ -638,7 +659,7 @@ Don't narrate what you did. The note itself is the artifact.
 4. **Probe vs. force — they're different, and probing is reflection's job.** "No feeling here" is a complete answer to a *specific feelings-question* ("How did that land?"). It is NOT a complete answer to the entire check-in or to a salient item. After "no feeling," ask one more non-feelings probe ("What did stand out?" / "What made it hard?" / "What carries forward?") before moving on. *Forcing* is insisting Mike feels something different than what he said; *probing* is asking what's underneath an answer he already gave. The ritual's job is the latter. Don't confuse them and don't use rule 4 as a license to skip depth.
 5. **No feelings probing in weekly.** Weekly is disposition-only — don't ask how an item made Mike feel. Keep the pace brisk.
 6. **No fabrication.** Mike's silence means pause. Not infer. Not assume. Pause.
-7. **🚫 Bullet content traces to Mike, not to inference.** Every intention, theme, priority, insight, recognition, or focus written via `bujo_apply_decisions:add` must trace to something Mike actually said during this session — either captured in Step 4 Part B (paraphrased reflection from Steps 2/3, with per-item confirmation) or in Step 5 (planning content from his Other-field response, with confirmation if reformatted beyond punctuation). Paraphrasing for BuJo bullet shape is allowed; synthesizing themes from his note bullets, inferring his mood into a captured statement, or composing priorities he didn't state is not. **If the reflection produced nothing capturable, that's the correct outcome — don't manufacture content to feel productive.** If Mike picks "Pass" / "Come back to this" / doesn't engage in Step 5, **zero `add` calls** for that step. Mike has previously reported the agent writing its own intentions instead of running the reflection — do not regress this.
+7. **🚫 Bullet content traces to Mike, not to inference.** Every intention, theme, priority, insight, recognition, or focus written via `bujo_apply_decisions:add` must trace to something Mike actually said during this session — either captured in Step 4 Part B (paraphrased reflection from Steps 2/3, with per-item confirmation) or in Step 5 (planning content from his Other-field response, with confirmation if reformatted beyond punctuation). Paraphrasing for BuJo bullet shape is allowed; synthesizing themes from his note bullets, inferring his mood into a captured statement, or composing priorities he didn't state is not. **If the reflection produced nothing capturable, that's the correct outcome — don't manufacture content to feel productive.** If Mike picks "Pass" / "Come back to this" / doesn't engage in Step 5, **zero `add` calls** for that step. Mike has previously reported the agent writing its own intentions instead of running the reflection — do not regress this. **One carve-out: Step 1.5 harvest backfills.** Harvested bullets trace to the session record (the `*.summary.md` file named in the bullet's `source` field), not to Mike's in-conversation words — that provenance field is mandatory, and the harvest is limited to high-signal facts from the record (shipped artifacts, decisions, events, completions), never synthesized themes or inferred moods.
 8. **🔥 Depth contract for the daily ritual (and full tiers generally).** Step 4 (scaffold) cannot run until Step 2's check-in has reached one of these end-states: (a) Mike explicitly opted out at the start ("skip reflection today" / "fast-track"), or (b) at least one of the three angles (what happened / how it landed / what carries forward) has produced a *substantive* observation — meaning more than a single dismissive word like "fine" or "good." If you find yourself about to dispatch `bujo_scaffold` and Step 2 was a one-Q-and-done exchange, stop and re-engage. The whole point of the ritual is the reflection — skipping it produces a journal that lies about what the day was. The ritual length depends on what's alive: a quick 5-minute daily on a settled day is fine; a 20-minute daily on a complicated day is fine. *Skipping* is what's broken.
 9. **Reflection captures land on the period being reflected on, not on the new period.** Daily reflection captures (insights from the check-in, recognitions from item review) write to **yesterday's note**, not today's. Today's note gets only Part A (mechanical scaffold) plus Step 5's planning content. Same pattern at every full tier — past-period reflection lives on the past-period note as a richer historical record.
 10. **MCP for all I/O.** No direct Apple Notes calls. No prose about formatting rules — the MCP owns them.

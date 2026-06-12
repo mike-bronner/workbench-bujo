@@ -6,7 +6,7 @@ BuJo ritual plugin for Claude Code. Part of the [`claude-workbench`](https://git
 
 An interactive Bullet Journal system that runs daily, weekly, monthly, and yearly rituals against Apple Notes. Inspired by Ryder Carroll's BuJo method — adapted for a persistent AI collaborator.
 
-Every ritual is interactive: it prompts for reflection, waits for real answers, and processes experiences (not just tasks). Every unfinished or dropped item gets individually inspected — Ryder's "friction of reconsideration" principle, preserved in a digital context. Mid-day, Claude watches for experientially-significant moments and can capture them to today's log on the fly.
+Every ritual is interactive: it prompts for reflection, waits for real answers, and processes experiences (not just tasks). Every unfinished or dropped item gets individually inspected — Ryder's "friction of reconsideration" principle, preserved in a digital context. Mid-day, capture moments to today's log on demand via `/bujo-capture`; each morning, the daily ritual harvests the previous day's session records and backfills anything the journal missed.
 
 ## Architecture
 
@@ -117,7 +117,7 @@ Walks configuration, deploys the single scheduled task, offers legacy cleanup.
 | `/workbench-bujo:bujo-monthly-ritual` | Ad-hoc monthly only. |
 | `/workbench-bujo:bujo-yearly-ritual` | Ad-hoc yearly only. |
 
-Holmes also **proactively** invokes the capture skill when he notices a significant moment during conversation — a realization, a meaningful decision, a breakthrough, an emotionally-notable beat. He checks with you before logging ("Worth capturing: … Adding to today?"). Routine tool calls and small code edits are filtered out.
+Capture is **manual**: invoke `/workbench-bujo:bujo-capture` when something lands worth logging — a realization, a decision, a breakthrough, an emotionally-notable beat. Anything that slips by mid-day isn't lost: the daily ritual's morning **harvest step** reads yesterday's session summaries from the memory vault and offers high-signal items (shipped artifacts, decisions, events, completions) for backfill onto yesterday's note.
 
 ## Ritual schedule
 
@@ -245,7 +245,7 @@ The plugin defines the *process* (when to run, what steps to follow). BuJo *rule
 - **Friction for every item.** Every unfinished or dropped item gets individually inspected. Ryder's "friction of reconsideration" principle — digital version. No batching.
 - **Mechanical work is offloaded.** Apple Notes reads/writes, BuJo formatting, migration logic — all owned by the scribe MCP. The plugin's skills orchestrate; they don't format.
 - **Write prescriptive, read lenient.** The scribe emits one canonical HTML form; it tolerates Apple Notes' variations on read. See [`docs/apple-notes-quirks.md`](https://github.com/mike-bronner/bujo-scribe-mcp/blob/main/docs/apple-notes-quirks.md) for quirks and mitigations.
-- **Live in the Daily Log.** Rapid Logging is a core BuJo principle — you're meant to capture meaningful moments throughout the day, not just at ritual time. Holmes assists by proactively noticing and asking to log experientially-significant moments mid-conversation.
+- **Live in the Daily Log.** Rapid Logging is a core BuJo principle — you're meant to capture meaningful moments throughout the day, not just at ritual time. Capture mid-day via `/bujo-capture` when something lands; the morning harvest step backfills what the day's sessions recorded but the journal missed.
 
 ## Further reading
 

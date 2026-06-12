@@ -21,17 +21,6 @@
           }
         ]
       }
-    ],
-    "UserPromptSubmit": [
-      {
-        "matcher": "",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/capture-watch-nudge.sh\""
-          }
-        ]
-      }
     ]
   }
 }

@@ -560,6 +560,7 @@ def apply_schedule(
         BujoLine(
             signifier="scheduled",
             text=f"[{decision.date}] {target.text}  (from {note.title})",
+            prefix=target.prefix,
             anchor=f"[{decision.date}] {target.text}"[:60],
         )
     ]
