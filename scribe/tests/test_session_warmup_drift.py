@@ -20,7 +20,15 @@ from pathlib import Path
 
 # scribe/tests/ -> scribe/ -> repo root -> hooks/session-warmup.sh
 HOOK = Path(__file__).resolve().parents[2] / "hooks" / "session-warmup.sh"
+NUDGE_HOOK = HOOK.parent / "capture-watch-nudge.sh"
 DRIFT_MARKER = "version drift"
+
+# Context-payload budgets. The warmup re-emits at every session start and
+# PostCompact; the nudge on EVERY user prompt. These ceilings catch payload
+# creep before it lands back in per-turn latency (the routing block emitted
+# ~8.8KB before the 2026-06 trim, the nudge ~1,080 bytes).
+WARMUP_BYTE_BUDGET = 8000
+NUDGE_BYTE_BUDGET = 250
 
 
 def _make_bundle(root: Path, version: str) -> Path:
@@ -111,3 +119,58 @@ def test_routing_block_always_emitted(tmp_path):
     _make_cache(home, ["0.10.2"])
     bundle = _make_bundle(tmp_path, "0.10.2")
     assert "BuJo routing" in _run(home, bundle)
+
+
+def test_warmup_payload_under_budget(tmp_path):
+    # No drift fixture — measures the steady-state routing block alone, the
+    # payload every session actually pays.
+    home = tmp_path / "home"
+    home.mkdir()
+    _make_cache(home, ["0.10.2"])
+    bundle = _make_bundle(tmp_path, "0.10.2")
+    payload = _run(home, bundle).encode("utf-8")
+    assert len(payload) < WARMUP_BYTE_BUDGET
+
+
+def test_capture_pointer_resolves_plugin_root(tmp_path):
+    # The tier rules were trimmed to a pointer; it must carry the absolute
+    # skill path when CLAUDE_PLUGIN_ROOT is set so the agent can Read it.
+    home = tmp_path / "home"
+    home.mkdir()
+    _make_cache(home, ["0.10.2"])
+    bundle = _make_bundle(tmp_path, "0.10.2")
+    out = _run(home, bundle)
+    assert f"{bundle}/skills/bujo-capture.md" in out
+
+
+def test_habit_pointer_resolves_plugin_root(tmp_path):
+    home = tmp_path / "home"
+    home.mkdir()
+    _make_cache(home, ["0.10.2"])
+    bundle = _make_bundle(tmp_path, "0.10.2")
+    out = _run(home, bundle)
+    assert f"{bundle}/skills/rituals/bujo-ritual.md" in out
+    assert "Step 2.5" in out
+
+
+def test_pointers_degrade_to_relative_without_plugin_root(tmp_path):
+    # `set -u` + unset CLAUDE_PLUGIN_ROOT (manual runs, tests) must not kill
+    # the warmup; the pointers fall back to repo-relative paths.
+    home = tmp_path / "home"
+    home.mkdir()
+    out = _run(home, plugin_root=None)
+    assert "skills/bujo-capture.md" in out
+    assert "skills/rituals/bujo-ritual.md" in out
+
+
+def test_nudge_payload_under_budget():
+    # The per-turn nudge needs no fixtures — it's static. Budget is strict:
+    # this block rides on every single user prompt.
+    result = subprocess.run(
+        ["/bin/bash", str(NUDGE_HOOK)],
+        env={"PATH": "/usr/bin:/bin:/usr/sbin:/sbin"},
+        capture_output=True,
+        timeout=30,
+    )
+    assert result.returncode == 0, result.stderr
+    assert len(result.stdout) <= NUDGE_BYTE_BUDGET

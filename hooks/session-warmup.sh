@@ -75,6 +75,13 @@ DRIFT
 
 _bujo_emit_drift_warning
 
+# Skill-file paths for the pointer sections below. Guarded expansion — under
+# `set -u` an unset CLAUDE_PLUGIN_ROOT (manual runs, tests) must not kill the
+# warmup; it degrades to repo-relative paths.
+_bujo_root="${CLAUDE_PLUGIN_ROOT:-}"
+_capture_skill="${_bujo_root:+$_bujo_root/}skills/bujo-capture.md"
+_ritual_skill="${_bujo_root:+$_bujo_root/}skills/rituals/bujo-ritual.md"
+
 cat <<'EOF'
 # 📓 BuJo routing
 
@@ -98,39 +105,16 @@ The `workbench-bujo` plugin is active. Mike's bullet journal lives in Apple Note
 
 ## Proactive capture — be the day's scribe
 
-Beyond reactive routing: **across every session, capture genuinely meaningful moments to today's note as they happen.** The journal becomes a sparse, signal-rich highlight reel. The per-turn `UserPromptSubmit` nudge reinforces this between turns — the rules below are the canonical reference.
+Beyond reactive routing: **across every session, capture genuinely meaningful moments to today's note as they happen.** The journal becomes a sparse, signal-rich highlight reel. The per-turn `UserPromptSubmit` nudge reinforces this between turns.
 
-### Three tiers (categorize every user message)
+Triage every user message into three tiers: **explicit completion / decision / event** → silent `bujo_apply_decisions:add` (or `:complete`) + one-line ack, no `AskUserQuestion`; **inferred / ambiguous capture-worthy moment** → propose via `AskUserQuestion` (yes/no, two options — the wording IS the bullet, no edit option); **routine code / file / lookup ops** → skip silently. Self-throttle: 3+ consecutive tier-2 nos → stop proposing for the session.
+EOF
 
-**1. Silent capture — explicit phrasing names a completion / decision / event / shipped artifact.**
-Mike said it as fact. Examples: *"I shipped v0.10.2"*, *"decided to go with Postgres"*, *"had a 1:1 with Sarah about hiring"*, *"finished the migration"*, *"Y is done"*.
-→ Dispatch `bujo_apply_decisions:add` (or `:complete` if it matches an open task). Confirm in one line: *"🪶 Logged: <bullet>"*. **No `AskUserQuestion`** — Mike already gave the signal. He can correct via natural language ("drop that") if the wording was wrong.
+cat <<EOF
+**Canonical tier definitions, examples, and the AskUserQuestion template:** read \`${_capture_skill}\` before the first tier-2 proposal.
+EOF
 
-**2. Propose via `AskUserQuestion` — inferred capture-worthiness, ambiguous.**
-Mike voiced something that might be a journal-worthy moment but didn't name it as one. Examples: a realization that emerged from work together, a possible pivot, a breakthrough that's not yet stated as a decision, a frustration with potential stakes, a future-dated task implied.
-→ `AskUserQuestion` with **two options only** (yes / no). The wording IS the bullet — no edit option. On yes → dispatch + ack. On no → drop silently, don't paraphrase and re-offer.
-
-```jsonc
-AskUserQuestion({
-  questions: [{
-    question: "🪶 Capture this on today's note?\n  `!— Architecture shift: MCP owns invariants, skills get drifty`",
-    header: "Capture?",
-    multiSelect: false,
-    options: [
-      { label: "Yes — log it", description: "Adds the bullet to today's note" },
-      { label: "No — skip",    description: "Not capture-worthy" }
-    ]
-  }]
-})
-```
-
-**3. Skip silently — routine / trivial / reconstructable.**
-Code edits, command runs, file lookups, "installed deps", "fixed typo", thinking-aloud that hasn't crystallized, work-in-progress checkpoints. Anything reconstructable from git history or tool transcripts. Don't propose, don't dispatch.
-
-### Self-throttle on rejection
-
-3+ consecutive `AskUserQuestion` nos in a session → stop proposing for the rest of the session and acknowledge once: *"Got it — I'll stop proposing captures this session. Run `/bujo-capture <text>` if something specific comes up."* The throttle applies only to tier-2 proposals; tier-1 silent captures continue (Mike can correct individual ones via "drop that").
-
+cat <<'EOF'
 ### Threshold dial
 
 Calibrated to err toward fewer-but-stronger captures. Mike adjusts mid-session via natural language: *"be more selective with captures"* moves triggers from tier-1/tier-2 toward skip; *"capture more eagerly"* loosens the bar. Carry the adjustment forward in the same session.
@@ -142,49 +126,13 @@ Plugin-loading clients only — Claude Code and Claude Cowork (Mac desktop app).
 ## Habit tracker (≥0.10) — surface what's due today
 
 Mike's monthly note has a habit-tracker table under the Tracker heading. Each column is a habit; column headers carry metadata (`Meditate (10 min) @08:00 [daily]`). Cells filled with `✅` are completions for that day-row.
+EOF
 
-At session start, if `today` exists, check the tracker for habits due today that haven't been marked done:
+cat <<EOF
+At session start, if \`today\` exists: read **Step 2.5 (Habit check-in)** in \`${_ritual_skill}\` and run that check now — parse the tracker on \`monthly_current\`, surface due-and-unmarked habits via one batched \`AskUserQuestion\` (≤4, yes/no), update cells on yes. No habit table on \`monthly_current\` → skip silently (habit tracking isn't set up).
+EOF
 
-1. `bujo_read(notes: ["monthly_current"])` — find the heading `text="Tracker"` and the next line with `kind="table"`. Its `raw_html` field carries the table HTML.
-2. Parse column headers (skip Day + Weekday — habits are columns 3+).
-3. For each habit:
-   - Parse cadence from `[<cadence>]`. Default to `daily` if unspecified.
-   - Determine if today is a "due day" (cadence matches today's weekday or interval).
-   - Find today's row in the table (day-of-month).
-   - Find the habit's cell in that row.
-   - If the cell is empty (no `✅`), it's an open habit-due signal.
-
-For each due-and-empty habit, surface via `AskUserQuestion` (yes/no, natural language). Batch up to 4 in a single call:
-
-```jsonc
-AskUserQuestion({
-  questions: [
-    {
-      question: "🌱 Habit due: `Bible Study` — done today?",
-      header: "Habit?",
-      multiSelect: false,
-      options: [
-        { label: "Yes — log it", description: "Mark today's cell ✅" },
-        { label: "Not today",    description: "Skip" }
-      ]
-    }
-    // up to 4 questions per call
-  ]
-})
-```
-
-On Yes:
-- Boolean habit → dispatch `bujo_apply_decisions:update_table` with the table HTML regenerated (today's cell flipped to `✅`). Confirm with one line.
-- Quantitative habit → follow up in plain text *"How much?"* → then dispatch with `✅ <n>`.
-
-On No → skip silently. Don't re-prompt the same habit later in the session.
-
-Self-throttle: same as proactive capture — 3+ consecutive nos this session → stop proposing habits for the rest of the session and acknowledge once.
-
-**Don't propose habits Mike has already marked done today** — check today's cell content first. **Don't propose habits whose cadence excludes today** (e.g., `[mwf]` on Tuesday).
-
-**No habit table on `monthly_current`?** Skip silently. The user hasn't set up habit tracking yet.
-
+cat <<'EOF'
 ## Rules of the road
 
 1. **Never invent a task list in memory.** If Mike mentions work to do, it belongs in the journal.
