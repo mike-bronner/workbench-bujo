@@ -75,11 +75,10 @@ DRIFT
 
 _bujo_emit_drift_warning
 
-# Skill-file paths for the pointer sections below. Guarded expansion — under
+# Skill-file path for the pointer section below. Guarded expansion — under
 # `set -u` an unset CLAUDE_PLUGIN_ROOT (manual runs, tests) must not kill the
 # warmup; it degrades to repo-relative paths.
 _bujo_root="${CLAUDE_PLUGIN_ROOT:-}"
-_capture_skill="${_bujo_root:+$_bujo_root/}skills/bujo-capture.md"
 _ritual_skill="${_bujo_root:+$_bujo_root/}skills/rituals/bujo-ritual.md"
 
 cat <<'EOF'
@@ -87,7 +86,7 @@ cat <<'EOF'
 
 The `workbench-bujo` plugin is active. Mike's bullet journal lives in Apple Notes under the `📓 Journal` folder and is managed via the `scribe` MCP (tools prefixed `mcp__plugin_workbench-bujo_scribe__bujo_*`).
 
-**The journal is the source of truth for tasks, events, notes, and schedules — not local memory.** When Mike mentions any of these in free conversation (outside of an explicit `/bujo` ritual), route through the scribe rather than inventing a side list.
+**The journal is the source of truth for tasks, events, notes, and schedules — never invent a task list in local memory.** When Mike mentions any of these in free conversation (outside of an explicit `/bujo` ritual), route through the scribe rather than keeping a side list.
 
 ## Trigger vocabulary → scribe action
 
@@ -103,26 +102,6 @@ The `workbench-bujo` plugin is active. Mike's bullet journal lives in Apple Note
 | "bring back X", "restore X", "I shouldn't have dropped X" | `op: "undrop"` on the matching bullet |
 | "combine X into Y", "fold X under Y", "nest X under Y" | `op: "combine"` — source gets `>`, target gets a sub-item under the parent. NEVER interpret "combine" as "drop" |
 
-## Proactive capture — be the day's scribe
-
-Beyond reactive routing: **across every session, capture genuinely meaningful moments to today's note as they happen.** The journal becomes a sparse, signal-rich highlight reel. The per-turn `UserPromptSubmit` nudge reinforces this between turns.
-
-Triage every user message into three tiers: **explicit completion / decision / event** → silent `bujo_apply_decisions:add` (or `:complete`) + one-line ack, no `AskUserQuestion`; **inferred / ambiguous capture-worthy moment** → propose via `AskUserQuestion` (yes/no, two options — the wording IS the bullet, no edit option); **routine code / file / lookup ops** → skip silently. Self-throttle: 3+ consecutive tier-2 nos → stop proposing for the session.
-EOF
-
-cat <<EOF
-**Canonical tier definitions, examples, and the AskUserQuestion template:** read \`${_capture_skill}\` before the first tier-2 proposal.
-EOF
-
-cat <<'EOF'
-### Threshold dial
-
-Calibrated to err toward fewer-but-stronger captures. Mike adjusts mid-session via natural language: *"be more selective with captures"* moves triggers from tier-1/tier-2 toward skip; *"capture more eagerly"* loosens the bar. Carry the adjustment forward in the same session.
-
-### Where this runs
-
-Plugin-loading clients only — Claude Code and Claude Cowork (Mac desktop app). Claude Chat doesn't run plugins; captures from there are out of scope.
-
 ## Habit tracker (≥0.10) — surface what's due today
 
 Mike's monthly note has a habit-tracker table under the Tracker heading. Each column is a habit; column headers carry metadata (`Meditate (10 min) @08:00 [daily]`). Cells filled with `✅` are completions for that day-row.
@@ -135,18 +114,13 @@ EOF
 cat <<'EOF'
 ## Rules of the road
 
-1. **Never invent a task list in memory.** If Mike mentions work to do, it belongs in the journal.
-2. **Always pre-warm the scribe.** If the deferred tool list shows `mcp__plugin_workbench-bujo_scribe__*`, load schemas via `ToolSearch(query="select:mcp__plugin_workbench-bujo_scribe__bujo_read,...")` before first use. The MCP may take ~10s to boot — retry with brief sleeps before concluding it's offline.
-3. **Three capture tiers, not one.** (a) Reactive-routing matches and explicit-phrasing captures dispatch silently — Mike gave the signal. (b) Inferred / ambiguous capture-worthy moments go through `AskUserQuestion` (yes/no). (c) Routine code / file / lookup ops are skipped silently. See *Proactive capture* above for the categorization rule.
-4. **Single items don't need the `/bujo` ritual.** Just dispatch one `add` (or capture) decision and confirm the diff in one line. The ritual is for periodic reflection (daily/weekly/etc.), not capture.
-5. **Respect existing signifiers and prefixes.** Priority (`✽`), inspiration (`!`), and explore (`◉`) are Mike's — inherit his choice if he mentions it, don't impose one.
-6. **Signal-to-noise is sacred.** Better to under-capture than to flood the log. The "skip silently" list above is the floor; everything trivial stays out.
+1. **Always pre-warm the scribe.** If the deferred tool list shows `mcp__plugin_workbench-bujo_scribe__*`, load schemas via `ToolSearch(query="select:mcp__plugin_workbench-bujo_scribe__bujo_read,...")` before first use. The MCP may take ~10s to boot — retry with brief sleeps before concluding it's offline.
+2. **Single items don't need the `/bujo` ritual.** Just dispatch one `add` decision and confirm the diff in one line. The ritual is for periodic reflection (daily/weekly/etc.), not capture.
 
 ## Not in scope for routing
 
 - Code-level TODOs and comments in source files — those stay in code.
 - Claude Code session-scoped todos (the `TodoWrite` tool) — those are for tracking the *current turn's work*, not durable tasks.
-- Items Mike is clearly thinking-aloud about, not committing to ("maybe I should X"). Confirm before capturing OR skip.
 
 EOF
 

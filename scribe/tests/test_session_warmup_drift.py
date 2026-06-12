@@ -20,15 +20,14 @@ from pathlib import Path
 
 # scribe/tests/ -> scribe/ -> repo root -> hooks/session-warmup.sh
 HOOK = Path(__file__).resolve().parents[2] / "hooks" / "session-warmup.sh"
-NUDGE_HOOK = HOOK.parent / "capture-watch-nudge.sh"
+HOOKS_JSON = HOOK.parent / "hooks.json"
 DRIFT_MARKER = "version drift"
 
-# Context-payload budgets. The warmup re-emits at every session start and
-# PostCompact; the nudge on EVERY user prompt. These ceilings catch payload
-# creep before it lands back in per-turn latency (the routing block emitted
-# ~8.8KB before the 2026-06 trim, the nudge ~1,080 bytes).
-WARMUP_BYTE_BUDGET = 8000
-NUDGE_BYTE_BUDGET = 250
+# Context-payload budget. The warmup re-emits at every session start and
+# PostCompact. This ceiling catches payload creep before it lands back in
+# per-turn latency (the routing block emitted ~8.8KB before the 2026-06
+# trim, ~5.6KB before the hook diet dropped the proactive-capture tiers).
+WARMUP_BYTE_BUDGET = 4096
 
 
 def _make_bundle(root: Path, version: str) -> Path:
@@ -132,17 +131,6 @@ def test_warmup_payload_under_budget(tmp_path):
     assert len(payload) < WARMUP_BYTE_BUDGET
 
 
-def test_capture_pointer_resolves_plugin_root(tmp_path):
-    # The tier rules were trimmed to a pointer; it must carry the absolute
-    # skill path when CLAUDE_PLUGIN_ROOT is set so the agent can Read it.
-    home = tmp_path / "home"
-    home.mkdir()
-    _make_cache(home, ["0.10.2"])
-    bundle = _make_bundle(tmp_path, "0.10.2")
-    out = _run(home, bundle)
-    assert f"{bundle}/skills/bujo-capture.md" in out
-
-
 def test_habit_pointer_resolves_plugin_root(tmp_path):
     home = tmp_path / "home"
     home.mkdir()
@@ -155,22 +143,29 @@ def test_habit_pointer_resolves_plugin_root(tmp_path):
 
 def test_pointers_degrade_to_relative_without_plugin_root(tmp_path):
     # `set -u` + unset CLAUDE_PLUGIN_ROOT (manual runs, tests) must not kill
-    # the warmup; the pointers fall back to repo-relative paths.
+    # the warmup; the pointer falls back to a repo-relative path.
     home = tmp_path / "home"
     home.mkdir()
     out = _run(home, plugin_root=None)
-    assert "skills/bujo-capture.md" in out
     assert "skills/rituals/bujo-ritual.md" in out
 
 
-def test_nudge_payload_under_budget():
-    # The per-turn nudge needs no fixtures — it's static. Budget is strict:
-    # this block rides on every single user prompt.
-    result = subprocess.run(
-        ["/bin/bash", str(NUDGE_HOOK)],
-        env={"PATH": "/usr/bin:/bin:/usr/sbin:/sbin"},
-        capture_output=True,
-        timeout=30,
-    )
-    assert result.returncode == 0, result.stderr
-    assert len(result.stdout) <= NUDGE_BYTE_BUDGET
+def test_no_stale_proactive_capture_references(tmp_path):
+    # The proactive-capture machinery (tiers, threshold dial, per-turn
+    # capture-watch nudge) was removed in the 2026-06 hook diet. None of its
+    # vocabulary may resurface in the emitted context block.
+    home = tmp_path / "home"
+    home.mkdir()
+    _make_cache(home, ["0.10.2"])
+    bundle = _make_bundle(tmp_path, "0.10.2")
+    out = _run(home, bundle)
+    for stale in ("Proactive capture", "capture-watch", "Threshold dial"):
+        assert stale not in out
+
+
+def test_capture_watch_nudge_fully_removed():
+    # The UserPromptSubmit nudge is gone: no registration in hooks.json and
+    # no orphaned script file left behind for a stale registration to find.
+    registrations = json.loads(HOOKS_JSON.read_text())
+    assert "UserPromptSubmit" not in registrations["hooks"]
+    assert not (HOOK.parent / "capture-watch-nudge.sh").exists()
