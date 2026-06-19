@@ -365,8 +365,8 @@ An item that matches is **fast-pathed**: give it a *lightweight disposition pass
 
 Some items get a mandatory probe regardless of how Mike opened. The orchestrator flags these via `recorded_experiences` (salience signals) and the parsed lines themselves carry the others:
 
-- **Migrated 3+ times** (`>` signifier appearing on the same task across 3+ recent dailies): always probe. "What's keeping this open across N migrations?" One follow-up, then disposition.
-- **Dropped** (`dropped == True`): always probe. "What drove the drop?" Drops carry feeling more often than tasks; surface it.
+- **Migrated 3+ times** (`>` signifier appearing on the same task across 3+ recent dailies): always probe — *except* items carrying a GitHub issue/PR reference (`#\d+` or a `github.com/.*/issues/` / `.*/pull/` URL), which get **no mandatory-probe treatment**; the disposition-only fast-path already handles them (see "GitHub issue/PR fast-path" above). "What's keeping this open across N migrations?" One follow-up, then disposition.
+- **Dropped** (`dropped == True`): always probe — *except* items carrying a GitHub issue/PR reference (`#\d+` or a `github.com/.*/issues/` / `.*/pull/` URL), which get **no mandatory-probe treatment**; the disposition-only fast-path already handles them (see "GitHub issue/PR fast-path" above). "What drove the drop?" Drops carry feeling more often than tasks; surface it.
 - **Insights** (`signifier == "note"` AND `prefix == "inspiration"`, rendered `!—`): always offer to expand. "Want to say more about that, or is the line itself enough?"
 - **Priority items** (`prefix == "priority"`, ✽): always probe what they meant. "How did this priority land — got attention, or got pushed?"
 
