@@ -130,7 +130,14 @@ def recurrence_for_cadence(cadence: str) -> RecurrenceSpec:
     if every_n:
         return RecurrenceSpec(frequency="daily", interval=max(1, int(every_n.group(1))))
 
-    # Nx-week (count cadence, no day pattern) and any unknown token → daily.
+    # Nx-week names a count, not specific days, so it has no fixed clock-day
+    # pattern — fall back to a daily nudge (see the docstring). Matched
+    # explicitly so this is a deliberate, documented case rather than an
+    # accidental fall-through.
+    if _N_PER_WEEK_RE.match(token):
+        return RecurrenceSpec(frequency="daily")
+
+    # Any unrecognised token → daily.
     return RecurrenceSpec(frequency="daily")
 
 
