@@ -428,6 +428,45 @@ class ScanOutput(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# Verb: reminder
+# ---------------------------------------------------------------------------
+
+class ReminderInput(BaseModel):
+    op: Literal["add", "remove"] = Field(
+        description="'add' creates the habit reminder; 'remove' deletes it."
+    )
+    header: str = Field(
+        description=(
+            "The habit's canonical tracker-header text, e.g. "
+            "'Meditate (10 min) @08:00 [daily]'. Matched verbatim for removal "
+            "and duplicate detection."
+        )
+    )
+    time: str | None = Field(
+        default=None,
+        description=(
+            "Exact 24-hour HH:MM the habit fires at. Only an exact time "
+            "produces a reminder; Anytime/Morning/Afternoon/Evening (or any "
+            "non-HH:MM value) pass None and no reminder is created. Ignored "
+            "for op='remove'."
+        ),
+    )
+
+
+class ReminderOutput(BaseModel):
+    action: Literal[
+        "created",
+        "skipped_no_time",
+        "skipped_exists",
+        "deleted",
+        "not_found",
+    ] = Field(description="Machine-readable outcome of the operation.")
+    header: str
+    list_name: str = Field(description="The Reminders list the habit reminder lives in.")
+    detail: str = Field(description="Human-readable one-line summary of the outcome.")
+
+
+# ---------------------------------------------------------------------------
 # Verb: summarize
 # ---------------------------------------------------------------------------
 

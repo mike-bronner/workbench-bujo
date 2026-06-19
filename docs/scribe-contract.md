@@ -297,6 +297,43 @@ stats: { ...underlying numbers... }
 
 ---
 
+### 6. `scribe.reminder`
+
+**Purpose:** create or delete a macOS Reminder for a habit. Used by
+`bujo-habit-add` / `bujo-habit-remove` so a timed habit alerts Mike even with
+no Claude session running. Reminders are not notes — this verb bypasses the
+notebook backend and drives the Reminders app via `osascript` directly.
+
+**Input:**
+```yaml
+op: add | remove          # required
+header: "<canonical tracker-header text>"   # required, matched verbatim
+time: "HH:MM" | null      # exact 24-hour time; only an exact time creates a
+                          # reminder. Anytime/Morning/Afternoon/Evening → null.
+                          # Ignored for op=remove.
+```
+
+**Output:**
+```yaml
+action: created | skipped_no_time | skipped_exists | deleted | not_found
+header: "<echoed header>"
+list_name: "BuJo Habits"
+detail: "<human one-liner>"
+```
+
+**Behavior:**
+- `add` with an exact `HH:MM` creates a reminder in the `BuJo Habits` list
+  (auto-created if absent), titled with `header`, alerting at `time`.
+- `add` with no exact time → `skipped_no_time`, nothing created.
+- `add` when `header` already has a reminder → `skipped_exists` (no duplicate).
+- `remove` deletes the reminder whose name equals `header`; a missing reminder
+  is `not_found`, **not** an error.
+- macOS limitation: the Reminders AppleScript dictionary has no writable
+  recurrence property, so the reminder is a timed alert; the habit's cadence
+  (e.g. `[daily]`) is carried in the title.
+
+---
+
 ## Diff format (shared across mutation verbs)
 
 ```yaml
