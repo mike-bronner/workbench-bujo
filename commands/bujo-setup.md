@@ -116,7 +116,7 @@ Confirm: "✅ Auto-approval set — scribe calls will run silently from now on."
 
 On **No**: skip silently. Mike can re-run `/workbench-bujo:bujo-setup` later if he changes his mind.
 
-**Why this is the right scope:** the pattern matches all bujo scribe tools (`bujo_read`, `bujo_apply_decisions`, `bujo_scaffold`, `bujo_scan`, `bujo_summarize`). It does NOT include other MCPs, Bash, or anything outside the plugin. Mike's existing permissions for everything else are untouched.
+**Why this is the right scope:** the pattern matches all bujo scribe tools (`bujo_read`, `bujo_apply_decisions`, `bujo_scaffold`, `bujo_scan`, `bujo_summarize`, `bujo_reminder`). It does NOT include other MCPs, Bash, or anything outside the plugin. Mike's existing permissions for everything else are untouched.
 
 ## Step 5 — Verify Journal Folder
 

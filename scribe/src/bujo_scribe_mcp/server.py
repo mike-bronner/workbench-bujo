@@ -20,6 +20,8 @@ from bujo_scribe_mcp.schemas import (
     ApplyDecisionsOutput,
     ReadInput,
     ReadOutput,
+    ReminderInput,
+    ReminderOutput,
     ScaffoldInput,
     ScaffoldOutput,
     ScanInput,
@@ -27,7 +29,7 @@ from bujo_scribe_mcp.schemas import (
     SummarizeInput,
     SummarizeOutput,
 )
-from bujo_scribe_mcp.tools import apply_decisions, read, scaffold, scan, summarize
+from bujo_scribe_mcp.tools import apply_decisions, read, reminder, scaffold, scan, summarize
 
 
 def build_context(config: Config | None = None) -> Context:
@@ -101,6 +103,22 @@ def build_server(context: Context | None = None) -> FastMCP:
     )
     def bujo_scan(payload: ScanInput) -> ScanOutput:
         return scan.execute(payload, ctx=ctx)
+
+    @mcp.tool(
+        name="bujo_reminder",
+        description=(
+            "Create or delete a recurring macOS Reminder for a habit. op='add' "
+            "with an exact HH:MM time creates a reminder in the auto-created "
+            "'BuJo Habits' list, titled with the habit's canonical "
+            "tracker-header text and recurring at the habit's cadence (parsed "
+            "from that header); a habit with no exact time (None) creates "
+            "nothing. Re-adding an existing header skips (no duplicate). "
+            "op='remove' deletes the reminder matching the header exactly; a "
+            "missing reminder is not an error. Returns the outcome in 'action'."
+        ),
+    )
+    def bujo_reminder(payload: ReminderInput) -> ReminderOutput:
+        return reminder.execute(payload, ctx=ctx)
 
     @mcp.tool(
         name="bujo_summarize",

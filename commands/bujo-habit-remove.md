@@ -7,7 +7,7 @@ The user invoked `/workbench-bujo:bujo-habit-remove` — typically with a habit 
 ## Pre-warm
 
 ```
-ToolSearch(query="select:AskUserQuestion,mcp__plugin_workbench-bujo_scribe__bujo_read,mcp__plugin_workbench-bujo_scribe__bujo_apply_decisions", max_results=3)
+ToolSearch(query="select:AskUserQuestion,mcp__plugin_workbench-bujo_scribe__bujo_read,mcp__plugin_workbench-bujo_scribe__bujo_apply_decisions,mcp__plugin_workbench-bujo_scribe__bujo_reminder", max_results=4)
 ```
 
 ## Step 1 — Resolve habit by name
@@ -54,6 +54,26 @@ bujo_apply_decisions(payload={
 ## Step 5 — Confirm
 
 Single line: *"🪶 Removed habit: `<header-text>` from this month's tracker."*
+
+## Step 6 — Delete the habit Reminder (if one exists)
+
+Removing the habit's column also retires its macOS Reminder. Dispatch
+`bujo_reminder` with the exact header text of the column just removed:
+
+```jsonc
+bujo_reminder({
+  op: "remove",
+  header: "<the exact header text of the removed column>"
+})
+```
+
+Matching is by exact header text. The tool is safe when no reminder exists —
+a habit added without a specific `@HH:MM` time never had one, so a missing
+reminder returns `action: "not_found"` and is **not** an error. Surface the
+outcome only when something was deleted:
+
+- `deleted` → *"⏰ Reminder removed."*
+- `not_found` → say nothing (there was no reminder to remove).
 
 ## Edge cases
 

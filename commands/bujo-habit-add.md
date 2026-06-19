@@ -9,7 +9,7 @@ The user invoked `/workbench-bujo:bujo-habit-add` — possibly with a name inlin
 Load deferred tool schemas at the very start:
 
 ```
-ToolSearch(query="select:AskUserQuestion,mcp__plugin_workbench-bujo_scribe__bujo_read,mcp__plugin_workbench-bujo_scribe__bujo_apply_decisions", max_results=3)
+ToolSearch(query="select:AskUserQuestion,mcp__plugin_workbench-bujo_scribe__bujo_read,mcp__plugin_workbench-bujo_scribe__bujo_apply_decisions,mcp__plugin_workbench-bujo_scribe__bujo_reminder", max_results=4)
 ```
 
 ## Step 1 — Collect the habit definition
@@ -164,6 +164,43 @@ If the table doesn't exist yet (no TableLine after the Tracker heading), scaffol
 ## Step 6 — Confirm
 
 Single line: *"🪶 Added habit: `<header text>`"*
+
+## Step 7 — Create the habit Reminder (only when the time is an exact `@HH:MM`)
+
+A habit with a specific clock time gets a **recurring** macOS Reminder so Mike
+is alerted even when no Claude session is running; habits with `Anytime`/
+`Morning`/`Afternoon`/`Evening` get **none** — the session-start habit check is
+their notification path. Don't branch by hand; always dispatch `bujo_reminder`
+and let it gate on the time (it skips when `time` isn't an exact `HH:MM`):
+
+```jsonc
+bujo_reminder({
+  op: "add",
+  header: "<the exact header text from Step 2>",
+  time: "<HH:MM from Question 3, or null for Anytime/Morning/Afternoon/Evening>"
+})
+```
+
+The tool creates the `BuJo Habits` Reminders list if it doesn't exist, titles
+the reminder with the canonical header text, and sets it to **recur at the
+habit's cadence** (parsed from the `[…]` suffix in the header — `[daily]`,
+`[mwf]`, `[every-3-days]`, etc.; absent brackets mean daily) at the given
+time, first firing at the next future occurrence. It's idempotent: re-adding a
+habit whose header already has a reminder returns `action: "skipped_exists"`
+(logs *"Reminder already exists"*) instead of creating a duplicate.
+
+Surface the outcome in one line based on `action`:
+
+- `created` → *"⏰ Reminder set for `<HH:MM>`."*
+- `skipped_exists` → *"⏰ Reminder already exists."*
+- `skipped_no_time` → say nothing (no clock time, by design).
+
+> macOS note: recurrence is real — the reminder repeats at the habit's cadence
+> via EventKit (a count cadence like `[3x-week]`, which names no fixed days,
+> falls back to a daily nudge). The **first** time the scribe creates a
+> reminder it triggers a one-time "allow Reminders access" prompt for the MCP
+> process; grant it (System Settings › Privacy & Security › Reminders) or no
+> reminders are created.
 
 ## Bootstrap (if Tracker section absent)
 
