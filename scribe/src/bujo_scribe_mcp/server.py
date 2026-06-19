@@ -107,10 +107,11 @@ def build_server(context: Context | None = None) -> FastMCP:
     @mcp.tool(
         name="bujo_reminder",
         description=(
-            "Create or delete a macOS Reminder for a habit. op='add' with an "
-            "exact HH:MM time creates a reminder in the auto-created "
+            "Create or delete a recurring macOS Reminder for a habit. op='add' "
+            "with an exact HH:MM time creates a reminder in the auto-created "
             "'BuJo Habits' list, titled with the habit's canonical "
-            "tracker-header text; a habit with no exact time (None) creates "
+            "tracker-header text and recurring at the habit's cadence (parsed "
+            "from that header); a habit with no exact time (None) creates "
             "nothing. Re-adding an existing header skips (no duplicate). "
             "op='remove' deletes the reminder matching the header exactly; a "
             "missing reminder is not an error. Returns the outcome in 'action'."

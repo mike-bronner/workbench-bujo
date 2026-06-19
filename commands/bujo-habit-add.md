@@ -167,11 +167,11 @@ Single line: *"🪶 Added habit: `<header text>`"*
 
 ## Step 7 — Create the habit Reminder (only when the time is an exact `@HH:MM`)
 
-A habit with a specific clock time gets a macOS Reminder so Mike is alerted
-even when no Claude session is running; habits with `Anytime`/`Morning`/
-`Afternoon`/`Evening` get **none** — the session-start habit check is their
-notification path. Don't branch by hand; always dispatch `bujo_reminder` and
-let it gate on the time (it skips when `time` isn't an exact `HH:MM`):
+A habit with a specific clock time gets a **recurring** macOS Reminder so Mike
+is alerted even when no Claude session is running; habits with `Anytime`/
+`Morning`/`Afternoon`/`Evening` get **none** — the session-start habit check is
+their notification path. Don't branch by hand; always dispatch `bujo_reminder`
+and let it gate on the time (it skips when `time` isn't an exact `HH:MM`):
 
 ```jsonc
 bujo_reminder({
@@ -182,10 +182,12 @@ bujo_reminder({
 ```
 
 The tool creates the `BuJo Habits` Reminders list if it doesn't exist, titles
-the reminder with the canonical header text, and sets the alert to the given
-time. It's idempotent: re-adding a habit whose header already has a reminder
-returns `action: "skipped_exists"` (logs *"Reminder already exists"*) instead
-of creating a duplicate.
+the reminder with the canonical header text, and sets it to **recur at the
+habit's cadence** (parsed from the `[…]` suffix in the header — `[daily]`,
+`[mwf]`, `[every-3-days]`, etc.; absent brackets mean daily) at the given
+time, first firing at the next future occurrence. It's idempotent: re-adding a
+habit whose header already has a reminder returns `action: "skipped_exists"`
+(logs *"Reminder already exists"*) instead of creating a duplicate.
 
 Surface the outcome in one line based on `action`:
 
@@ -193,9 +195,12 @@ Surface the outcome in one line based on `action`:
 - `skipped_exists` → *"⏰ Reminder already exists."*
 - `skipped_no_time` → say nothing (no clock time, by design).
 
-> macOS note: the Reminders AppleScript dictionary has no writable recurrence
-> property, so the reminder is a timed alert at `@HH:MM`; the habit's cadence
-> (e.g. `[daily]`) lives in the reminder title.
+> macOS note: recurrence is real — the reminder repeats at the habit's cadence
+> via EventKit (a count cadence like `[3x-week]`, which names no fixed days,
+> falls back to a daily nudge). The **first** time the scribe creates a
+> reminder it triggers a one-time "allow Reminders access" prompt for the MCP
+> process; grant it (System Settings › Privacy & Security › Reminders) or no
+> reminders are created.
 
 ## Bootstrap (if Tracker section absent)
 

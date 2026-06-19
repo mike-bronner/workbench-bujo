@@ -18,6 +18,9 @@ dependencies = [
   "mcp>=1.2.0",
   "pydantic>=2.6",
   "pyyaml>=6.0",
+  # macOS-only: recurring habit reminders drive EventKit through PyObjC.
+  # Marker-gated so non-macOS installs (CI, sdist build checks) stay clean.
+  "pyobjc-framework-EventKit>=10.0; sys_platform == 'darwin'",
 ]
 
 [project.optional-dependencies]
@@ -48,3 +51,9 @@ exclude = [
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/bujo_scribe_mcp"]
+
+[[tool.mypy.overrides]]
+# PyObjC frameworks ship no type stubs / py.typed marker. Used only by the
+# macOS EventKit reminder backend, lazily imported there.
+module = ["EventKit", "Foundation"]
+ignore_missing_imports = true

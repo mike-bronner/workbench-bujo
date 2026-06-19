@@ -299,10 +299,11 @@ stats: { ...underlying numbers... }
 
 ### 6. `scribe.reminder`
 
-**Purpose:** create or delete a macOS Reminder for a habit. Used by
-`bujo-habit-add` / `bujo-habit-remove` so a timed habit alerts Mike even with
-no Claude session running. Reminders are not notes — this verb bypasses the
-notebook backend and drives the Reminders app via `osascript` directly.
+**Purpose:** create or delete a **recurring** macOS Reminder for a habit. Used
+by `bujo-habit-add` / `bujo-habit-remove` so a timed habit alerts Mike even
+with no Claude session running. Reminders are not notes — this verb bypasses
+the notebook backend and drives the Reminders app via **EventKit** (PyObjC)
+directly.
 
 **Input:**
 ```yaml
@@ -323,14 +324,20 @@ detail: "<human one-liner>"
 
 **Behavior:**
 - `add` with an exact `HH:MM` creates a reminder in the `BuJo Habits` list
-  (auto-created if absent), titled with `header`, alerting at `time`.
+  (auto-created if absent), titled with `header`, **recurring at the habit's
+  cadence** at `time`, first firing at the next future occurrence.
+- Cadence is parsed from the `[…]` suffix of `header`: `daily` (or absent),
+  `weekdays`, `mwf`, `tth`, `every-N-days` map to real `EKRecurrenceRule`s;
+  `Nx-week` (a count with no fixed days) falls back to a daily reminder.
 - `add` with no exact time → `skipped_no_time`, nothing created.
 - `add` when `header` already has a reminder → `skipped_exists` (no duplicate).
 - `remove` deletes the reminder whose name equals `header`; a missing reminder
   is `not_found`, **not** an error.
-- macOS limitation: the Reminders AppleScript dictionary has no writable
-  recurrence property, so the reminder is a timed alert; the habit's cadence
-  (e.g. `[daily]`) is carried in the title.
+- macOS: EventKit requires Reminders access — the first `add` triggers a
+  one-time TCC authorization prompt for the MCP process. Denied access raises
+  a backend error (no reminder is created). The dependency
+  (`pyobjc-framework-EventKit`) is macOS-only, installed via a `sys_platform`
+  marker.
 
 ---
 
