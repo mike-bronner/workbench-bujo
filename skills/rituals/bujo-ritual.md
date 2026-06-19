@@ -142,7 +142,7 @@ reflection_focus:
 
 | Tier | Mode | Scaffold target | Default scope | Check-in framing (Step 2) | Planning framing (Step 5) |
 |---|---|---|---|---|---|
-| daily | **full** | `today` | `["yesterday"]` | "How did yesterday go? And anything you want to add to yesterday's log before we review it?" | "What's the priority that honors where you are today?" |
+| daily | **full** | `today` | `["yesterday"]` | "How did yesterday go? And anything you want to add to yesterday's log before we review it?" | "What's the priority for today — the one thing that needs to happen?" |
 | weekly | **light** | `weekly_current` | ISO week's existing dailies | *(skipped — no check-in)* | "What's the shape of this week — what matters most?" |
 | monthly | **full** | `monthly_current` | month's existing dailies | "How did last month land for you? And anything you want to add to the month's record?" | "What's the focus for this month — one or two things?" |
 | yearly | **full** | `yearly_current` | year's existing monthlies | "How did last year land? And anything you want to surface that wasn't captured?" | "What's the year about — themes, not a todo list?" |
