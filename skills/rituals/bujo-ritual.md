@@ -192,11 +192,22 @@ Keep the parsed lines available as you run the rest of the ritual.
 
 1. **Resolve the memory vault.** Read the workbench-core config at `~/.claude/plugins/data/workbench-core-*/config.json` and take its `memory_path` key (currently `/Users/mike/Documents/Claude/Memory`). Session summaries live at `<memory_path>/sessions/<YYYY-MM-DD>/*.summary.md` — read yesterday's date directory.
 2. **Read yesterday's summaries.** Prefer the workbench-memory MCP when its tools are available; fall back to reading the summary files directly from disk.
-3. **Distill high-signal items only**: shipped artifacts, decisions made, events that happened, completions. Routine code edits, lookups, and in-progress noise stay out — the same signal bar as any capture.
+3. **Distill high-signal items only**: shipped artifacts, decisions made, events that happened, completions. Routine code edits, lookups, and in-progress noise stay out — the same signal bar as any capture. **Exclude agent-driven GitHub dev-pipeline activity** (see the exclusion note below) — The Index already tracks it, so backfilling it onto yesterday's note just duplicates a ledger that lives elsewhere.
 4. **De-duplicate against yesterday's `lines[]`** (from Step 1). Anything already on yesterday's note — captured mid-day or planned and completed there — is NOT harvested again. Only genuine gaps backfill.
 5. **Backfill onto YESTERDAY's note** via `bujo_apply_decisions:add` — note `"yesterday"`, never today. Completed work lands as `×` (completed), decisions/insights as `—`/`!—` notes, events as `○`. **Set the Bullet `source` field on every harvested bullet** (e.g., `source: "sessions/2026-06-11/abc123.summary.md"`) — that provenance is what authorizes the write (see hard rule 7).
 6. **Still-open work harvests as `task` bullets** (`•`, signifier `task`). Don't dispose of them here — Step 3's disposition machinery walks every open item on yesterday and migrates what carries to today.
 7. **Hold the harvested list for Step 2.** Present the backfilled bullets at the start of the check-in ("From yesterday's sessions I backfilled: … — anything to correct or add?") so Mike can discuss, reword, or drop any of them as part of the reflection.
+
+### 🚫 Exclude agent-driven GitHub dev-pipeline activity
+
+Session summaries often record the dev team agents working the GitHub project board — Inspector Lestrade triaging issues, Dr. Watson opening/updating PRs, Sherlock Holmes leaving review comments, plus the issue creation / PR merge that surrounds them. **Silently drop all of it during distillation (step 3).** The Index is the system of record for that pipeline; backfilling it onto the BuJo note would duplicate a ledger that already lives elsewhere and bury Mike's own day under bot bookkeeping. No bullet, no `source` write — it never reaches the harvested list.
+
+**This exclusion is scoped to *agent-driven pipeline actions only*** (Lestrade triage, Watson PRs, Holmes review). It is NOT a blanket ban on anything GitHub-shaped:
+
+- ✅ **Harvest** — a *human* GitHub decision worth journaling: "I decided to close the mobile roadmap issue," "I cut the v2 scope down to the launcher." These are Mike's choices, not pipeline mechanics, so they pass the normal high-signal bar and land like any other decision. (Mike can still reword or drop them in Step 2 — harvest surfaces, it doesn't force.)
+- 🚫 **Exclude** — "Watson opened PR #42," "Holmes requested changes on #17," "triaged 6 issues into Ready." Pipeline mechanics; The Index has them.
+
+When in doubt, the test is *who decided and what tracks it*: an agent moving work through the board → exclude; Mike making a call he'd want to remember → harvestable.
 
 ### Failure mode — skip, never fail
 
@@ -300,7 +311,7 @@ If SessionStart already prompted some habits earlier today (and Mike answered), 
 
 **Chapter mark at start:** `mcp__ccd_session__mark_chapter(title="Review")` (full tiers) or `mcp__ccd_session__mark_chapter(title="Disposition")` (weekly light mode).
 
-**Every unfinished or dropped item gets inspected.** No batching, no fast path. This is Ryder's "friction is the feature" principle — the act of reconsidering each item *is* the practice.
+**Every unfinished or dropped item gets inspected.** No batching, no fast path — *with one scoped exception:* items that reference a GitHub issue/PR get a disposition-only fast-path (see "GitHub issue/PR fast-path" below), because The Index already holds their story. Every other item gets the full reflective look. This is Ryder's "friction is the feature" principle — the act of reconsidering each item *is* the practice.
 
 **Mode differs by tier:**
 - **Full mode (daily/monthly/yearly):** each item gets a reflective look — feelings, meaning, decision. Use the steps below as written.
@@ -317,6 +328,19 @@ Compose a single ordered list:
 2. Then remaining open items not already covered
 3. Then dropped items (reconsider the drop)
 4. Then `potential_gaps` (topics that weren't in the notes at all)
+
+### 🔀 GitHub issue/PR fast-path — disposition only, no reflection
+
+**Before** running the reflective per-item logic below, check each item's text for a **GitHub issue/PR reference**:
+
+- the pattern `#\d+` (e.g., `#42`), OR
+- a URL matching `github.com/.*/issues/` or `.*/pull/` (e.g., `https://github.com/mike-bronner/workbench-bujo/pull/6`).
+
+An item that matches is **fast-pathed**: give it a *lightweight disposition pass only* — **Carry forward / Drop / Complete**, asked plainly. **No feelings probe, no "how did this land?" angle, no mandatory-probe treatment.** These items are pipeline trackers, not lived experiences; The Index holds their real story. Reflecting on them is friction without payoff. Skip steps 2–4 below for these items and go straight to disposition (step 5).
+
+**Source-agnostic:** the fast-path applies to a matching item *regardless of how it arrived on the note* — harvested from a session summary, captured manually mid-day, or migrated from an earlier daily. What matters is the `#\d+`/URL reference in the text, nothing else.
+
+**Match on the reference, not the topic.** Only an explicit issue/PR number triggers the fast-path. A manually added task with no reference — `• Research GitHub Actions caching`, `• Read up on PR review etiquette` — is a normal item and gets the **full** reflective review below. The word "GitHub" alone never fast-paths anything; the `#\d+` or issue/PR URL does.
 
 ### For each item in the list
 
@@ -388,6 +412,7 @@ For routine items (no salience signal, no priority prefix, completed cleanly wit
 ### Hard rules for Step 3
 
 - **Every item gets a real look.** No batching through with "carry, drop, schedule, or done?" This is the core departure from a task-review checklist: each item is processed, not dispositioned.
+- **GitHub issue/PR items are fast-pathed — disposition only, never reflected on.** Any item whose text carries a `#\d+` reference or a `github.com/.*/issues/` or `.*/pull/` URL gets a plain Carry-forward / Drop / Complete pass with no feelings probe and no mandatory-probe treatment — The Index is the system of record for that pipeline work, so reflecting on it here is friction without payoff. The fast-path keys on the explicit reference, not the topic: a referenceless task like `• Research GitHub Actions caching` is a normal item and gets the full review. This rule holds regardless of how the item reached the note (harvested, manually captured, or migrated).
 - **Ryder's migration-fatigue principle:** an item migrated 3+ times without action is a signal. Push harder on those. Use the orchestrator's `migrated_thrice` flag if present.
 - **Never force feelings.** "No feeling here" is a complete answer. Move on.
 - **Never pre-interpret** what a feeling means. Surface it; let Mike name it.

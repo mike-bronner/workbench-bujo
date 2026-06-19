@@ -122,6 +122,10 @@ retrospect:
 
 **Hard rule:** every `recorded_experiences[].item` you emit MUST be the `text` of a real `ParsedLine` from the corresponding note's `lines` array. Do not paraphrase. Do not stitch together items across lines. Do not compose items from "what should be there." If `lines` is empty or `None`, that note has no items — full stop.
 
+### 🚫 Exclude GitHub issue/PR pipeline items from reflection focus
+
+A `ParsedLine` whose `text` carries a **GitHub issue/PR reference** — the pattern `#\d+` (e.g. `#42`) or a URL matching `github.com/.*/issues/` or `.*/pull/` — is dev-pipeline bookkeeping that The Index already tracks. **Never emit such a line as a `recorded_experiences` or `potential_gaps` entry**, even if it shows a salience signal (a prefix, a drop, a completion-after-friction). The ritual skill fast-paths these to a plain disposition, so surfacing them as reflection topics would only feed the ritual something it's built to skip. Match on the explicit reference, not the topic — a referenceless line like `• Research GitHub Actions caching` is a normal candidate and follows the usual salience rules.
+
 Read the parsed lines of the notes in each ritual's retrospection scope. For each scope, produce two lists:
 
 ### `recorded_experiences` — salient items IN the notes
@@ -380,3 +384,4 @@ plan:
 3. **Deterministic ordering.** `rituals` is always in `[yearly, monthly, weekly, daily]` order, regardless of how you enumerated them.
 4. **No user interaction.** If you find yourself wanting to ask the user something, that's a signal to add a warning and let the main conversation surface it instead.
 5. **Finish with the YAML block.** The router parses the last YAML block in your output — any prose before it is for observability only.
+6. **Never surface GitHub issue/PR pipeline items as reflection focus.** A line whose `text` carries a `#\d+` reference or a `github.com/.*/issues/` or `.*/pull/` URL is excluded from both `recorded_experiences` and `potential_gaps`, regardless of salience signals — The Index tracks that pipeline, and the ritual fast-paths these to a plain disposition. Match on the reference, not the topic.

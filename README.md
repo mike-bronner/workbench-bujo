@@ -117,7 +117,7 @@ Walks configuration, deploys the single scheduled task, offers legacy cleanup.
 | `/workbench-bujo:bujo-monthly-ritual` | Ad-hoc monthly only. |
 | `/workbench-bujo:bujo-yearly-ritual` | Ad-hoc yearly only. |
 
-Capture is **manual**: invoke `/workbench-bujo:bujo-capture` when something lands worth logging — a realization, a decision, a breakthrough, an emotionally-notable beat. Anything that slips by mid-day isn't lost: the daily ritual's morning **harvest step** reads yesterday's session summaries from the memory vault and offers high-signal items (shipped artifacts, decisions, events, completions) for backfill onto yesterday's note.
+Capture is **manual**: invoke `/workbench-bujo:bujo-capture` when something lands worth logging — a realization, a decision, a breakthrough, an emotionally-notable beat. Anything that slips by mid-day isn't lost: the daily ritual's morning **harvest step** reads yesterday's session summaries from the memory vault and offers high-signal items (shipped artifacts, decisions, events, completions) for backfill onto yesterday's note. Agent-driven GitHub dev-pipeline work (issue triage, PR creation/review/merge) is excluded — The Index already tracks it; your own GitHub decisions still harvest.
 
 ## Ritual schedule
 
