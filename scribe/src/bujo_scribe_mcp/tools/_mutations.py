@@ -420,11 +420,12 @@ def apply_migrate(
     descendants = find_descendants(note, target)
 
     # Snapshot the entire branch for the target note.
-    # Parent re-emits as an open task by default; descendants preserve
-    # signifier (re-opening any that were already migrated).
+    # Parent re-emits as an open task — a carried-forward item is actionable,
+    # regardless of its source signifier; descendants preserve signifier
+    # (re-opening any that were already migrated).
     carry_lines: list[BujoLine] = [
         BujoLine(
-            signifier=target.signifier if target.signifier != "migrated" else "task",
+            signifier="task",
             text=target.text,
             prefix=target.prefix,
             depth=target.depth,
