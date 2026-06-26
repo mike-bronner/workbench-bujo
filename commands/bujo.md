@@ -135,6 +135,16 @@ Read `${CLAUDE_PLUGIN_ROOT}/skills/rituals/bujo-ritual.md` once at the start of 
 
 Between tiers, no artificial delay — the next one starts as soon as the previous one finishes. Each tier's pass drives its own interactive flow with Mike via the universal protocol.
 
+### 🛑 Start the first ritual by *asking*, not by narrating what's queued
+
+When you hand off to the first tier, its first interactive step's `AskUserQuestion` is your **first action** — don't preface execution with a summary of the steps ahead. Output of the form:
+
+> **Awaiting Mike for:** the check-in, habit check-in, item disposition, Future Log migration, scaffold, and today's priorities.
+
+is **forbidden** — it asks nothing and leaves the session looking complete. The protocol's "Lead with the question" rule is canonical; the entrypoint must not undercut it by narrating the queue before the first tier even starts.
+
+**Unattended / overnight runs block at the first question — by design.** The cron fires `/bujo` with no one watching (e.g., a nightly pre-seed before the morning ritual). That run is *expected* to reach the first interactive step, invoke `AskUserQuestion`, and **pause there** — not to auto-complete, not to summarize the pending work, not to fabricate answers. Mike returns in the morning to a question already on screen, answers it, and the ritual continues. A paused-on-a-question session is the correct end-state for an unattended run; a "here's what I'm waiting for" summary is a bug.
+
 ## Step 4 — close
 
 Once all rituals in the plan have run, close with a single line:
@@ -148,3 +158,4 @@ Once all rituals in the plan have run, close with a single line:
 3. **Don't skip Step 2 when warnings exist.** Even if the warnings look minor, Mike gets to decide.
 4. **Use the `/bujo` entry point for scheduled tasks too.** The cron fires this same command. Warnings surface in the paused session; Mike sees them when he returns.
 5. **Don't invoke the orchestrator more than once per session.** Its job is to plan once, up front.
+6. **Lead with the question; never narrate pending steps.** Hand off to the first ritual by invoking its first `AskUserQuestion`, not by emitting an "Awaiting Mike for: [list]" summary of what's queued. An unattended/overnight run is *expected* to block on that first question and pause — that's the correct end-state, not auto-completion or a pending-work summary.
