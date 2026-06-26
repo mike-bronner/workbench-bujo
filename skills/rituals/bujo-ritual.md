@@ -36,7 +36,7 @@ Then for every interactive prompt, actually invoke `AskUserQuestion` with a stru
 ```jsonc
 AskUserQuestion({
   questions: [{
-    question: "How did yesterday go?",
+    question: "What went well yesterday? Then — what did it teach you, and is there anything still on your mind to set down before we review?",
     header: "Check-in",
     multiSelect: false,
     options: [
@@ -95,7 +95,7 @@ Note the `preview` field — show item context (original text, days open, migrat
 ```jsonc
 AskUserQuestion({
   questions: [{
-    question: "How did yesterday go?",
+    question: "What went well yesterday? Then — what did it teach you, and is there anything still on your mind to set down before we review?",
     header: "Check-in",
     multiSelect: false,
     options: [
@@ -153,7 +153,7 @@ reflection_focus:
 
 | Tier | Mode | Scaffold target | Default scope | Check-in framing (Step 2) | Planning framing (Step 5) |
 |---|---|---|---|---|---|
-| daily | **full** | `today` | `["yesterday"]` | "How did yesterday go? And anything you want to add to yesterday's log before we review it?" | "What's the priority for today — the one thing that needs to happen?" |
+| daily | **full** | `today` | `["yesterday"]` | "What went well yesterday? Then — what did it teach you, and is there anything still on your mind to set down before we review?" (wins → lessons → brain dump; the open-task prune lands in angle 3) | "What's the priority for today — the one thing that needs to happen?" |
 | weekly | **light** | `weekly_current` | ISO week's existing dailies | *(skipped — no check-in)* | "What's the shape of this week — what matters most?" |
 | monthly | **full** | `monthly_current` | month's existing dailies | "How did last month land for you? And anything you want to add to the month's record?" | "What's the focus for this month — one or two things?" |
 | yearly | **full** | `yearly_current` | year's existing monthlies | "How did last year land? And anything you want to surface that wasn't captured?" | "What's the year about — themes, not a todo list?" |
@@ -242,6 +242,7 @@ The check-in runs as a real conversation across **three angles**, in order. Each
 
 1. **🔍 What happened — factual ground.**
    Opener (tier-appropriate, see Tier matrix Step-2 column).
+   **Daily — lead with wins, then lessons.** Open on what went *well* yesterday before any critique: the win is the positive anchor the rest of the reflection hangs off. Once a win is named, draw out the lesson behind it — what he noticed or learned, not just what happened. A win stated is the floor of angle 1, not the ceiling.
    If Mike's first response is one word ("fine," "scattered," "rough"), that's a probe-trigger, not a closer. Probe the texture:
    - "What does scattered mean in yesterday's terms — too many things, or one thing pulling at you?"
    - "Walk me through it. What stood out?"
@@ -250,7 +251,7 @@ The check-in runs as a real conversation across **three angles**, in order. Each
 
 2. **💭 How it landed — felt sense.**
    Once the factual ground is established, ask how it landed:
-   - daily: "Where did you feel pulled forward yesterday? Where did you feel pushed?"
+   - daily: this is where the brain dump lands — "Anything still on your mind? Lingering thoughts, worries, or open loops you want to set down before we go further?" Getting it out of his head is how the day actually lands; clearing that mental space is the point. Capture anything worth keeping onto yesterday's note.
    - monthly: "How are you sitting with the month — what's the texture?"
    - yearly: "What did the year do to you — what changed in you, what didn't?"
    If Mike has nothing to say about felt sense, accept it after one re-ask ("Anything in your body about it, or just neutral?"), but don't skip the angle. "Neutral" is a real answer; silence isn't.
@@ -260,6 +261,7 @@ The check-in runs as a real conversation across **three angles**, in order. Each
    - "Anything from yesterday you want to carry forward — a recognition, a reminder, or something to do differently today?"
    - "If there's one thing yesterday taught you, what is it?"
    This often surfaces the most valuable captures — things that belong on yesterday's note as insights, and sometimes things that influence today's planning (Step 5).
+   **Daily — prune the open tasks here, not in Step 3.** For each task still open from yesterday (the Step 1.5 harvest list / yesterday's note), ask the necessity question as part of the reflection: *is this still worth doing, or should it just be eliminated?* This is the reflective prune — deciding what deserves to carry forward at all — and it belongs in the check-in. Step 3 then handles the mechanical disposition (migrate / schedule / drop / complete) of whatever the prune decided; don't defer the "should this exist?" question to it.
 
 #### When to close the check-in
 
