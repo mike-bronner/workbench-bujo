@@ -15,6 +15,7 @@ opener, not the old generic question.
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 # scribe/tests/ -> scribe/ -> repo root
@@ -22,6 +23,7 @@ REPO = Path(__file__).resolve().parents[2]
 PROTOCOL = REPO / "skills" / "rituals" / "bujo-ritual.md"
 
 OLD_GENERIC_OPENER = "how did yesterday go"
+NEW_OPENER_CUE = "what went well yesterday"
 
 
 def _daily_matrix_row(text: str) -> str:
@@ -40,6 +42,20 @@ def _step2(text: str) -> str:
     end = low.find("## step 2.5", start)
     assert end != -1, "Step 2.5 heading is missing — can't bound Step 2."
     return low[start:end]
+
+
+def _checkin_opener_blocks(text: str) -> list[str]:
+    """Return the ``AskUserQuestion`` code blocks whose header is ``Check-in``.
+
+    These are the tool-invocation blocks that actually surface the opener to
+    Mike — the literal surface AC #1/#9 are about. They sit ~170 lines *before*
+    Step 2, so they fall outside both ``_daily_matrix_row`` and ``_step2``; the
+    other tests never reach them. The fence pattern tolerates indented fences so
+    a relocated example block is still caught."""
+    blocks = re.findall(r"```jsonc[^\n]*\n(.*?)\n[ \t]*```", text, re.DOTALL)
+    checkin = [b for b in blocks if "AskUserQuestion(" in b and 'header: "Check-in"' in b]
+    assert checkin, "No AskUserQuestion 'Check-in' opener blocks found to guard."
+    return checkin
 
 
 def test_daily_matrix_opener_is_structured_not_generic():
@@ -83,3 +99,30 @@ def test_escape_hatches_preserved():
     text = PROTOCOL.read_text().lower()
     assert "pass — skip today" in text, "The 'Pass — skip today' escape hatch is missing."
     assert "come back to this" in text, "The 'Come back to this' escape hatch is missing."
+
+
+def test_checkin_askuserquestion_blocks_carry_structured_opener():
+    """AC #1, #9: the opener Mike actually sees — the ``AskUserQuestion``
+    ``Check-in`` blocks — must carry the structured wins-first question and never
+    the old generic one. These blocks live outside the Tier-matrix row and the
+    Step 2 narrative, so without this the question on those blocks could be
+    reverted to 'How did yesterday go?' with every other test still green."""
+    for block in _checkin_opener_blocks(PROTOCOL.read_text()):
+        low = block.lower()
+        assert NEW_OPENER_CUE in low, (
+            "A Check-in AskUserQuestion block is missing the structured opener "
+            f"('{NEW_OPENER_CUE}')."
+        )
+        assert OLD_GENERIC_OPENER not in low, (
+            "A Check-in AskUserQuestion block still uses the generic "
+            "'How did yesterday go?' opener."
+        )
+
+
+def test_generic_opener_absent_everywhere():
+    """AC #1: the old generic question must not survive anywhere in the protocol
+    — Tier-matrix row, Step 2 narrative, or the AskUserQuestion opener blocks."""
+    assert OLD_GENERIC_OPENER not in PROTOCOL.read_text().lower(), (
+        "The old generic 'How did yesterday go?' opener still appears in the "
+        "protocol — it must be fully replaced by the structured opener."
+    )
