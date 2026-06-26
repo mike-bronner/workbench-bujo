@@ -192,22 +192,26 @@ Keep the parsed lines available as you run the rest of the ritual.
 
 1. **Resolve the memory vault.** Read the workbench-core config at `~/.claude/plugins/data/workbench-core-*/config.json` and take its `memory_path` key (currently `/Users/mike/Documents/Claude/Memory`). Session summaries live at `<memory_path>/sessions/<YYYY-MM-DD>/*.summary.md` — read yesterday's date directory.
 2. **Read yesterday's summaries.** Prefer the workbench-memory MCP when its tools are available; fall back to reading the summary files directly from disk.
-3. **Distill high-signal items only**: shipped artifacts, decisions made, events that happened, completions. Routine code edits, lookups, and in-progress noise stay out — the same signal bar as any capture. **Exclude agent-driven GitHub dev-pipeline activity** (see the exclusion note below) — The Index already tracks it, so backfilling it onto yesterday's note just duplicates a ledger that lives elsewhere.
+3. **Distill high-signal items only**: shipped artifacts, decisions made, events that happened, completions. Routine code edits, lookups, and in-progress noise stay out — the same signal bar as any capture. **Exclude GitHub-tracked work** (see the exclusion note below) — code changes, commits, PR contributions, and open-issue work whose system of record is a GitHub issue or PR, whether an agent drove it or Mike did. GitHub already tracks it, so backfilling it onto yesterday's note just duplicates a ledger that lives elsewhere.
 4. **De-duplicate against yesterday's `lines[]`** (from Step 1). Anything already on yesterday's note — captured mid-day or planned and completed there — is NOT harvested again. Only genuine gaps backfill.
 5. **Backfill onto YESTERDAY's note** via `bujo_apply_decisions:add` — note `"yesterday"`, never today. Completed work lands as `×` (completed), decisions/insights as `—`/`!—` notes, events as `○`. **Set the Bullet `source` field on every harvested bullet** (e.g., `source: "sessions/2026-06-11/abc123.summary.md"`) — that provenance is what authorizes the write (see hard rule 7).
-6. **Still-open work harvests as `task` bullets** (`•`, signifier `task`). Don't dispose of them here — Step 3's disposition machinery walks every open item on yesterday and migrates what carries to today.
+6. **Still-open non-GitHub work harvests as `task` bullets** (`•`, signifier `task`). GitHub-tracked work never reaches this point — the distillation exclusion in item 3 already dropped it, so a still-open GitHub issue (like the MySQL example in the exclusion note) is *not* backfilled as an open task. Don't dispose of the remaining open items here — Step 3's disposition machinery walks every open item on yesterday and migrates what carries to today.
 7. **Hold the harvested list for Step 2.** Present the backfilled bullets at the start of the check-in ("From yesterday's sessions I backfilled: … — anything to correct or add?") so Mike can discuss, reword, or drop any of them as part of the reflection.
 
-### 🚫 Exclude agent-driven GitHub dev-pipeline activity
+### 🚫 Exclude GitHub-tracked work
 
-Session summaries often record the dev team agents working the GitHub project board — Inspector Lestrade triaging issues, Dr. Watson opening/updating PRs, Sherlock Holmes leaving review comments, plus the issue creation / PR merge that surrounds them. **Silently drop all of it during distillation (step 3).** The Index is the system of record for that pipeline; backfilling it onto the BuJo note would duplicate a ledger that already lives elsewhere and bury Mike's own day under bot bookkeeping. No bullet, no `source` write — it never reaches the harvested list.
+Session summaries are full of GitHub work — both the dev team agents working the project board (Inspector Lestrade triaging issues, Dr. Watson opening/updating PRs, Sherlock Holmes leaving review comments, plus the issue creation / PR merge around them) **and Mike's own developer work** (writing code, opening or pushing to a PR as author, grinding on an open issue). GitHub activity as a developer is just work — it's not individual tasks. **Silently drop all of it during distillation (step 3)** — no bullet, no `source` write, it never reaches the harvested list. GitHub is the system of record for this work; backfilling it onto the BuJo note would duplicate a ledger that already lives elsewhere and bury Mike's day under bookkeeping.
 
-**This exclusion is scoped to *agent-driven pipeline actions only*** (Lestrade triage, Watson PRs, Holmes review). It is NOT a blanket ban on anything GitHub-shaped:
+**The discriminator is where the work lives, not who did it.** If the work's system of record is a GitHub issue or PR — whether an agent drove it or Mike did — it's excluded from harvest. A decision or insight that has *no* GitHub tracking home (e.g., "decided to kill the mobile roadmap") is not pipeline bookkeeping; it stays subject to the normal high-signal bar and may be harvested like any other decision. (Mike can still reword or drop a harvested item in Step 2 — harvest surfaces, it doesn't force.)
 
-- ✅ **Harvest** — a *human* GitHub decision worth journaling: "I decided to close the mobile roadmap issue," "I cut the v2 scope down to the launcher." These are Mike's choices, not pipeline mechanics, so they pass the normal high-signal bar and land like any other decision. (Mike can still reword or drop them in Step 2 — harvest surfaces, it doesn't force.)
-- 🚫 **Exclude** — "Watson opened PR #42," "Holmes requested changes on #17," "triaged 6 issues into Ready." Pipeline mechanics; The Index has them.
+- 🚫 **Exclude** — work whose home is a GitHub issue or PR, regardless of author:
+  - `× Passport OAuth cleanup (PassportServiceProvider, route tests)` — code work tracked in its PR.
+  - `× Terraform PR (Redshift sync env vars for issue)` — a PR contribution.
+  - `• MySQL 1615 in parallel tests — still open` — in-progress issue work; still open, so GitHub is tracking it. Don't backfill it as an open task bullet.
+  - Agent pipeline mechanics: "Watson opened PR #42," "Holmes requested changes on #17," "triaged 6 issues into Ready."
+- ✅ **Harvest** — decisions and insights with no GitHub tracking home: "decided to kill the mobile roadmap," "cut the v2 scope down to the launcher." These are Mike's calls, not work tracked in an issue/PR, so they pass the normal high-signal bar and land like any other decision.
 
-When in doubt, the test is *who decided and what tracks it*: an agent moving work through the board → exclude; Mike making a call he'd want to remember → harvestable.
+When in doubt: **GitHub-tracked work (code changes, commits, PR activity, open issues) → exclude; decisions or insights without a GitHub issue/PR as their home → normal signal bar.**
 
 ### Failure mode — skip, never fail
 
