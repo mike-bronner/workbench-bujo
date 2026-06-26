@@ -169,6 +169,45 @@ def test_migrate_preserves_prefix_on_source_and_carried_lines(
     assert carried_child.depth == 1
 
 
+def test_migrate_reemits_scheduled_parent_as_task(
+    make_backend, make_context, render_body, make_bujo_line
+):
+    """A carried-forward parent is always re-emitted as an open ``task``,
+    regardless of its source signifier. Pins the Future Log surfacer case
+    where a ``scheduled`` (``<``) due item is carried onto today: it must
+    land as an actionable ``•`` task, not stay ``scheduled`` (the
+    contradiction between apply_migrate's code and its own comment)."""
+    source_body = render_body(
+        "source-note",
+        [make_bujo_line("scheduled", "Renew the domain", prefix="priority")],
+    )
+    target_body = render_body("target-note", [make_bujo_line("task", "Existing task")])
+    ctx = make_context(
+        make_backend({"source-note": source_body, "target-note": target_body})
+    )
+
+    out = apply_decisions.execute(
+        ApplyDecisionsInput(
+            note="source-note",
+            decisions=[
+                DecisionMigrate(
+                    op="migrate", bullet="Renew the domain", target="target-note"
+                ),
+            ],
+        ),
+        ctx=ctx,
+    )
+
+    assert not out.unmatched
+
+    source_line = _line(_bujo_lines(ctx, "source-note"), "Renew the domain")
+    assert source_line.signifier == "migrated"
+
+    carried_parent = _line(_bujo_lines(ctx, "target-note"), "Renew the domain")
+    assert carried_parent.signifier == "task"  # re-opens as actionable, not scheduled
+    assert carried_parent.prefix == "priority"  # prefix still carried
+
+
 def test_schedule_preserves_prefix_on_source_and_future_log_entry(
     make_backend, make_context, render_body, make_bujo_line
 ):
