@@ -123,7 +123,7 @@ def test_a2_triages_each_item_before_dispatch():
     a2 = _a2_section()
     assert "askuserquestion" in a2
     assert "before** any `bujo_apply_decisions`" in a2
-    assert "never** migrated automatically" in a2
+    assert "never** carried forward automatically" in a2
 
 
 def test_a2_offers_four_dispositions():
@@ -143,10 +143,11 @@ def test_a2_preview_shows_text_and_original_date():
 
 
 def test_a2_carry_forward_is_the_only_path_to_today():
-    # AC: only "Carry forward" lands on today (via migrate's cross-note
-    # effect); the other three mutate the Future Log only.
+    # AC: only "Carry forward" lands on today (via the `surface` op's
+    # cross-note effect, which removes the source — no `>` stub); the other
+    # three mutate the Future Log only.
     a2 = _a2_section()
-    assert "migrate" in a2 and 'target `today`' in a2
+    assert "surface` (target `today`)" in a2
     assert "only option that lands anything on today" in a2
     assert "mutate the future log only" in a2
 
@@ -193,16 +194,16 @@ def test_a2_empty_scan_skips_silently():
 
 
 def test_a2_batches_dispositions_per_note():
-    # AC: decisions are batched — one call to the Future Log, the migrate's
-    # cross-note effect is the single write to today.
+    # AC: decisions are batched — one call to the Future Log, the `surface`
+    # op's cross-note effect is the single write to today.
     a2 = _a2_section()
     assert "one future log call" in a2
     assert 'single `bujo_apply_decisions(note: "future_log"' in a2
 
 
 def test_a2_mixed_dispositions_batch_into_one_call():
-    # AC (mixed dispositions): the worked example batches migrate + drop +
+    # AC (mixed dispositions): the worked example batches surface + drop +
     # update + complete into a single Future Log apply_decisions call.
     a2 = _a2_section()
-    for op in ('op: "migrate"', 'op: "drop"', 'op: "update"', 'op: "complete"'):
+    for op in ('op: "surface"', 'op: "drop"', 'op: "update"', 'op: "complete"'):
         assert op in a2, f"A2 batched example is missing {op}"

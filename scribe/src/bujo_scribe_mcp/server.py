@@ -84,11 +84,13 @@ def build_server(context: Context | None = None) -> FastMCP:
         name="bujo_apply_decisions",
         description=(
             "Apply mutations to an existing note: complete, migrate, "
-            "schedule, drop, add, update, reorder. Reads the target note "
-            "fresh immediately before writing. Ambiguous or missing bullet "
-            "matches are returned in 'unmatched' and not applied. "
+            "schedule, surface, drop, add, update, reorder. Reads the target "
+            "note fresh immediately before writing. Ambiguous or missing "
+            "bullet matches are returned in 'unmatched' and not applied. "
             "dry_run=true previews the diff without writing. Scheduling "
-            "without a future date is rejected."
+            "without a future date is rejected. `surface` moves a due Future "
+            "Log entry onto a daily/period note and removes it from the "
+            "Future Log (no `>` stub)."
         ),
     )
     def bujo_apply_decisions(payload: ApplyDecisionsInput) -> ApplyDecisionsOutput:

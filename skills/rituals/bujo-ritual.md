@@ -60,7 +60,7 @@ That's prose rendering. There are no buttons. The user has to type anyway. The U
 The sibling failure mode, and the one that strands unattended overnight runs: instead of asking the first question, the agent writes a prose summary of everything it's *about* to do, then stops — e.g.:
 
 > **Awaiting Mike for:**
-> The check-in (what happened yesterday / how it landed / what carries forward), habit check-in, disposition of the open task, migration of overdue Future Log items, scaffold of today's note, and priorities for the day.
+> The check-in (what happened yesterday / how it landed / what carries forward), habit check-in, disposition of the open task, surfacing of overdue Future Log items, scaffold of today's note, and priorities for the day.
 
 **That is not asking — it's a status report that leaves nothing pending.** Listing the steps you're *going* to take is never a substitute for taking the first one. When you reach **any** interactive step (Step 2 check-in, Step 2.5 habits, Step 3 disposition, Step 5 planning), your first action is the `AskUserQuestion` tool call for that step's first prompt: no "here's what's coming," no "awaiting Mike for…," no enumerated queue of upcoming questions. Ask the first question; the tool call itself is the signal that the session is waiting.
 
@@ -168,7 +168,7 @@ All I/O goes through `mcp__plugin_workbench-bujo_scribe__*`. Never call Apple No
 
 - `bujo_read` — fetch parsed `lines[]` for each note (scope_notes + current-tier target)
 - `bujo_scaffold` — create/merge the current-tier target
-- `bujo_apply_decisions` — mutate any note (complete, migrate, schedule, drop, add, update, reorder, remove)
+- `bujo_apply_decisions` — mutate any note (complete, migrate, schedule, surface, drop, add, update, reorder, remove)
 - `bujo_scan` — find items by status: `open`, `due_today`, `overdue`, `surfaces_today`, or `unrecognized`. Use `unrecognized` to surface non-BuJo legacy/malformed content for `apply_decisions:remove` cleanup; the returned `text`/`anchor` round-trips into the remove op.
 - `bujo_summarize` — optional summary block
 
@@ -488,7 +488,7 @@ Part A is two operations, not one:
 - `sections` containing ONLY:
   - **Calendar events** for the period (via DataSource backend when implemented; until then, ask Mike or skip)
 
-**A2. Triage Future Log surfacers one-by-one — present each item, THEN dispatch.** A surfacing item is **never** migrated automatically. The old A2 copied every Future Log entry onto today the moment its date arrived, so Mike had no say over what actually carried — exactly the friction this step removes. Each surfacing entry now gets a per-item `AskUserQuestion` triage **before** any `bujo_apply_decisions` call; only the dispositions Mike picks are dispatched.
+**A2. Triage Future Log surfacers one-by-one — present each item, THEN dispatch.** A surfacing item is **never** carried forward automatically. The old A2 copied every Future Log entry onto today the moment its date arrived, so Mike had no say over what actually carried — exactly the friction this step removes. Each surfacing entry now gets a per-item `AskUserQuestion` triage **before** any `bujo_apply_decisions` call; only the dispositions Mike picks are dispatched. When Mike picks **Carry forward**, the disposition uses the `surface` op (**not** `migrate`) so the entry leaves the Future Log entirely — no `>` stub accumulates.
 
 ```
 1. Scan the Future Log for items to triage:
@@ -497,9 +497,9 @@ Part A is two operations, not one:
        signifier is open or scheduled (resolved entries are excluded
        by the scan, see ≥0.9.5 filter behavior).
    bujo_scan(scope=["future_log"], filter={status: "overdue"})
-     → entries whose date already passed but were never migrated
+     → entries whose date already passed but were never surfaced
        (e.g., the daily ritual was skipped on that date). Triage
-       these the SAME way — per item, never auto-migrated.
+       these the SAME way — per item, never auto-carried.
 
 2. If BOTH scans return nothing, A2 is done — skip it silently. No
    prompt, no "nothing to surface" narration.
@@ -514,7 +514,7 @@ AskUserQuestion({
     header: "Future Log",
     multiSelect: false,
     options: [
-      { label: "Carry forward", description: "Migrate onto today's note",          preview: "<scan_item.text> — scheduled <scan_item.due>" },
+      { label: "Carry forward", description: "Move onto today's note",             preview: "<scan_item.text> — scheduled <scan_item.due>" },
       { label: "Drop",          description: "Let it go — drop on the Future Log",  preview: "<scan_item.text> — scheduled <scan_item.due>" },
       { label: "Reschedule",    description: "Pick a new date — update in place",   preview: "<scan_item.text> — scheduled <scan_item.due>" },
       { label: "Mark complete", description: "Already done — complete on Future Log", preview: "<scan_item.text> — scheduled <scan_item.due>" }
@@ -529,18 +529,18 @@ For an **overdue** item, frame the question as overdue and keep its original dat
 
 | Mike picked | Decision op | Effect on the Future Log entry |
 |---|---|---|
-| Carry forward | `migrate` (target `today`) | Source line signifier → `>` (migrated). Cross-note: fresh `•` task appended to today, carrying the same text (incl. `[YYYY-MM-DD]` prefix as provenance). **This is the only option that lands anything on today.** |
+| Carry forward | `surface` (target `today`) | Source entry (and any sub-items) **removed entirely** from the Future Log — no `>` stub. Cross-note: fresh `•` task appended to today, carrying the same text (incl. `[YYYY-MM-DD]` prefix as provenance); a `scheduled`/`<` entry re-opens as a `•` task, an `event` stays an event. **This is the only option that lands anything on today.** |
 | Drop | `drop` | Source line gets `<s>…</s>` strikethrough. Nothing reaches today. |
 | Reschedule | `update` | Ask Mike for the new date (must be future), then rewrite the entry's date tag in place: `new_text` = the original text with its `[YYYY-MM-DD]` prefix swapped for the new date. The entry stays on the Future Log and surfaces again on the new date. (Use `update`, **not** `schedule` — `schedule` would append a *second* Future Log entry, duplicating the item.) |
-| Mark complete | `complete` | Source line signifier → `×` (completed). The item was never migrated, so completion stamps the **Future Log entry itself** — there's no today line to complete. |
+| Mark complete | `complete` | Source line signifier → `×` (completed). The item was never carried, so completion stamps the **Future Log entry itself** — there's no today line to complete. |
 
-**Batch the dispatch — one Future Log call.** Collect every disposition into a SINGLE `bujo_apply_decisions(note: "future_log", …)` call; the migrate op's cross-note effect handles the lone write to today on its own. Don't dispatch per item.
+**Batch the dispatch — one Future Log call.** Collect every disposition into a SINGLE `bujo_apply_decisions(note: "future_log", …)` call; the `surface` op's cross-note effect handles the lone write to today on its own. Don't dispatch per item.
 
 ```jsonc
 bujo_apply_decisions({
   note: "future_log",
   decisions: [
-    { op: "migrate",  bullet: "[2026-06-26] Renew passport",          target: "today" },
+    { op: "surface",  bullet: "[2026-06-26] Renew passport",          target: "today" },
     { op: "drop",     bullet: "[2026-06-26] Cancel old subscription" },
     { op: "update",   bullet: "[2026-06-26] Book dentist",            new_text: "[2026-07-10] Book dentist" },
     { op: "complete", bullet: "[2026-06-26] Submit expense report" }
@@ -548,11 +548,13 @@ bujo_apply_decisions({
 })
 ```
 
-**Verification (mandatory):** check the returned `diff` and `unmatched`. If a decision lands in `unmatched` (e.g. `NOT_FOUND` — the anchor didn't match), tell Mike which item and retry with the exact `text` from the scan. Don't silently drop a disposition.
+**Verification (mandatory):** check the returned `diff` and `unmatched`. If a decision lands in `unmatched` (e.g. `NOT_FOUND` / `AMBIGUOUS_BULLET` — the anchor didn't match or matched two entries), tell Mike which item and retry with the exact `text` from the scan. Both `unmatched` reasons mutate neither note. Don't silently drop a disposition.
 
-**Why triage, not blind migrate:** scaffold-add can't mark a Future Log entry resolved, so an entry copied to today by scaffold surfaces every morning forever — Mike reported exactly that bug. The first fix overcorrected into auto-migrate, which closes the loop but takes the choice away from Mike. Per-item triage is the correct middle: every surfacing entry leaves the queue the way Mike chose (migrated / dropped / completed / rescheduled to a new date), so nothing surfaces forever **and** nothing carries onto today without his say.
+**Why triage, not blind carry-forward:** scaffold-add can't mark a Future Log entry resolved, so an entry copied to today by scaffold surfaces every morning forever — Mike reported exactly that bug. The first fix overcorrected into auto-migrate, which closes the loop but takes the choice away from Mike. Per-item triage is the correct middle: every surfacing entry leaves the queue the way Mike chose (carried / dropped / completed / rescheduled to a new date), so nothing surfaces forever **and** nothing carries onto today without his say.
 
-**Do NOT add "migrated items" to scaffold sections.** A Carry-forward's `migrate` op already appends the task to today via the scribe's cross-note effect, exactly as Step 3's migrate decisions do for yesterday's items. Scaffold-add would double-write.
+**Why `surface` for Carry forward, not `migrate`:** `migrate` would close the surface-forever loop but leaves a `>` stub, turning the Future Log into a growing historical pile (the issue #14 complaint). `surface` removes the source and appends to today in one atomic call — the Future Log only ever holds pending scheduled entries (`<`), never resolved or migrated ones. The append is made durable **before** the source deletion commits, so a mid-sequence failure leaves a recoverable duplicate, never an entry lost from both notes.
+
+**Do NOT add "carried items" to scaffold sections.** A Carry-forward's `surface` op already appends the task to today via the scribe's cross-note effect, exactly as Step 3's migrate decisions do for yesterday's items. Scaffold-add would double-write.
 
 Setup-time ordering (events → tasks → notes) is applied by the MCP automatically. Don't pre-sort.
 

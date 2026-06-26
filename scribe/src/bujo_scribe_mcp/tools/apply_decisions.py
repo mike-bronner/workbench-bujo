@@ -2,9 +2,15 @@
 
 Contract invariants:
 - Reads the note fresh immediately before writing (parallel-edit guard).
-- Cross-note effects (migrate, schedule) mutate both notes atomically from
-  the caller's perspective — the primary note's diff plus the target note's
-  diff both land before this verb returns.
+- Cross-note effects (migrate, schedule, surface) mutate both notes
+  atomically from the caller's perspective — the primary note's diff plus the
+  target note's diff both land before this verb returns.
+- Cross-note write ordering guards against data loss: any effect that writes a
+  DIFFERENT note is committed BEFORE the primary (source) note, so a
+  mid-sequence failure leaves a recoverable duplicate rather than vanishing.
+  This matters for `surface`, which physically DELETES its source branch — if
+  the source committed first and the target append then failed, the entry
+  would be lost from both notes (issue #14, AC #3).
 - Gap 2: `schedule` requires a strictly-future date. Without it, the
   decision is rejected and the task stays as an open task.
 - `dry_run=true` computes the diff without writing anything (to any note).
@@ -34,6 +40,7 @@ from bujo_scribe_mcp.schemas import (
     DecisionRemove,
     DecisionReorder,
     DecisionSchedule,
+    DecisionSurface,
     DecisionUndrop,
     DecisionUpdate,
     DecisionUpdateTable,
@@ -56,6 +63,7 @@ from bujo_scribe_mcp.tools._mutations import (
     apply_remove,
     apply_reorder,
     apply_schedule,
+    apply_surface,
     apply_undrop,
     apply_update,
     apply_update_table,
@@ -116,22 +124,40 @@ def _execute_locked(input: ApplyDecisionsInput, *, ctx: Context) -> ApplyDecisio
         if cross is not None:
             cross_requests.append(cross)
 
-    # Commit primary note (unless dry run).
+    # Commit ordering — guard AC #3 (issue #14). `surface` physically deletes
+    # its source branch, so committing the source note before the target
+    # append would lose the entry from BOTH notes if that append then failed.
+    # To make the worst case a recoverable duplicate instead of data loss,
+    # cross-note effects targeting a DIFFERENT note are made durable first
+    # (phase 1), then the primary/source note is committed (phase 2). Same-note
+    # effects (a `combine` onto the source) must run AFTER the primary commit,
+    # since they re-read the source and would otherwise be clobbered (phase 3).
+    # Output order is preserved by slotting each effect at its original index.
+    cross_effects: list[CrossNoteEffect | None] = [None] * len(cross_requests)
+    deferred: list[int] = []
+
+    # Phase 1 — durable appends to other notes, before the source is touched.
+    for idx, req in enumerate(cross_requests):
+        if resolve(req.target_slug, rules=ctx.rules) == title:
+            deferred.append(idx)
+        else:
+            cross_effects[idx] = _apply_cross_note(req, ctx=ctx, dry_run=input.dry_run)
+
+    # Phase 2 — commit the primary/source note (the `surface` branch deletion
+    # only becomes durable here, after the target append above).
     if not input.dry_run:
         body = render_note(parsed, ctx.rules)
         ctx.backend.update(ref, body)
 
-    # Resolve & apply cross-note effects.
-    cross_effects: list[CrossNoteEffect] = []
-    for req in cross_requests:
-        effect = _apply_cross_note(req, ctx=ctx, dry_run=input.dry_run)
-        cross_effects.append(effect)
+    # Phase 3 — same-note effects re-read the just-committed source.
+    for idx in deferred:
+        cross_effects[idx] = _apply_cross_note(cross_requests[idx], ctx=ctx, dry_run=input.dry_run)
 
     return ApplyDecisionsOutput(
         note_id=ref.title,
         diff=_build_diff(all_diffs),
         unmatched=unmatched,
-        cross_note_effects=cross_effects,
+        cross_note_effects=[e for e in cross_effects if e is not None],
     )
 
 
@@ -176,6 +202,8 @@ def _dispatch(
         return diffs, reason, None
     if isinstance(decision, DecisionMigrate):
         return apply_migrate(parsed, decision, ctx.rules)
+    if isinstance(decision, DecisionSurface):
+        return apply_surface(parsed, decision, ctx.rules)
     if isinstance(decision, DecisionCombine):
         return apply_combine(parsed, decision, ctx.rules)
     if isinstance(decision, DecisionSchedule):
