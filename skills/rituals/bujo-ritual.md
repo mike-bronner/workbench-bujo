@@ -203,22 +203,26 @@ Keep the parsed lines available as you run the rest of the ritual.
 
 1. **Resolve the memory vault.** Read the workbench-core config at `~/.claude/plugins/data/workbench-core-*/config.json` and take its `memory_path` key (currently `/Users/mike/Documents/Claude/Memory`). Session summaries live at `<memory_path>/sessions/<YYYY-MM-DD>/*.summary.md` — read yesterday's date directory.
 2. **Read yesterday's summaries.** Prefer the workbench-memory MCP when its tools are available; fall back to reading the summary files directly from disk.
-3. **Distill high-signal items only**: shipped artifacts, decisions made, events that happened, completions. Routine code edits, lookups, and in-progress noise stay out — the same signal bar as any capture. **Exclude agent-driven GitHub dev-pipeline activity** (see the exclusion note below) — The Index already tracks it, so backfilling it onto yesterday's note just duplicates a ledger that lives elsewhere.
+3. **Distill high-signal items only**: shipped artifacts, decisions made, events that happened, completions. Routine code edits, lookups, and in-progress noise stay out — the same signal bar as any capture. **Exclude GitHub-tracked work** (see the exclusion note below) — code changes, commits, PR contributions, and open-issue work whose system of record is a GitHub issue or PR, whether an agent drove it or Mike did. GitHub already tracks it, so backfilling it onto yesterday's note just duplicates a ledger that lives elsewhere.
 4. **De-duplicate against yesterday's `lines[]`** (from Step 1). Anything already on yesterday's note — captured mid-day or planned and completed there — is NOT harvested again. Only genuine gaps backfill.
 5. **Backfill onto YESTERDAY's note** via `bujo_apply_decisions:add` — note `"yesterday"`, never today. Completed work lands as `×` (completed), decisions/insights as `—`/`!—` notes, events as `○`. **Set the Bullet `source` field on every harvested bullet** (e.g., `source: "sessions/2026-06-11/abc123.summary.md"`) — that provenance is what authorizes the write (see hard rule 7).
-6. **Still-open work harvests as `task` bullets** (`•`, signifier `task`). Don't dispose of them here — Step 3's disposition machinery walks every open item on yesterday and migrates what carries to today.
+6. **Still-open non-GitHub work harvests as `task` bullets** (`•`, signifier `task`). GitHub-tracked work never reaches this point — the distillation exclusion in item 3 already dropped it, so a still-open GitHub issue (like the MySQL example in the exclusion note) is *not* backfilled as an open task. Don't dispose of the remaining open items here — Step 3's disposition machinery walks every open item on yesterday and migrates what carries to today.
 7. **Hold the harvested list for Step 2.** Present the backfilled bullets at the start of the check-in ("From yesterday's sessions I backfilled: … — anything to correct or add?") so Mike can discuss, reword, or drop any of them as part of the reflection.
 
-### 🚫 Exclude agent-driven GitHub dev-pipeline activity
+### 🚫 Exclude GitHub-tracked work
 
-Session summaries often record the dev team agents working the GitHub project board — Inspector Lestrade triaging issues, Dr. Watson opening/updating PRs, Sherlock Holmes leaving review comments, plus the issue creation / PR merge that surrounds them. **Silently drop all of it during distillation (step 3).** The Index is the system of record for that pipeline; backfilling it onto the BuJo note would duplicate a ledger that already lives elsewhere and bury Mike's own day under bot bookkeeping. No bullet, no `source` write — it never reaches the harvested list.
+Session summaries are full of GitHub work — both the dev team agents working the project board (Inspector Lestrade triaging issues, Dr. Watson opening/updating PRs, Sherlock Holmes leaving review comments, plus the issue creation / PR merge around them) **and Mike's own developer work** (writing code, opening or pushing to a PR as author, grinding on an open issue). GitHub activity as a developer is just work — it's not individual tasks. **Silently drop all of it during distillation (step 3)** — no bullet, no `source` write, it never reaches the harvested list. GitHub is the system of record for this work; backfilling it onto the BuJo note would duplicate a ledger that already lives elsewhere and bury Mike's day under bookkeeping.
 
-**This exclusion is scoped to *agent-driven pipeline actions only*** (Lestrade triage, Watson PRs, Holmes review). It is NOT a blanket ban on anything GitHub-shaped:
+**The discriminator is where the work lives, not who did it.** If the work's system of record is a GitHub issue or PR — whether an agent drove it or Mike did — it's excluded from harvest. A decision or insight that has *no* GitHub tracking home (e.g., "decided to kill the mobile roadmap") is not GitHub-tracked work; it stays subject to the normal high-signal bar and may be harvested like any other decision. (Mike can still reword or drop a harvested item in Step 2 — harvest surfaces, it doesn't force.)
 
-- ✅ **Harvest** — a *human* GitHub decision worth journaling: "I decided to close the mobile roadmap issue," "I cut the v2 scope down to the launcher." These are Mike's choices, not pipeline mechanics, so they pass the normal high-signal bar and land like any other decision. (Mike can still reword or drop them in Step 2 — harvest surfaces, it doesn't force.)
-- 🚫 **Exclude** — "Watson opened PR #42," "Holmes requested changes on #17," "triaged 6 issues into Ready." Pipeline mechanics; The Index has them.
+- 🚫 **Exclude** — work whose home is a GitHub issue or PR, regardless of author:
+  - `× Passport OAuth cleanup (PassportServiceProvider, route tests)` — code work tracked in its PR.
+  - `× Terraform PR (Redshift sync env vars for issue)` — a PR contribution.
+  - `• MySQL 1615 in parallel tests — still open` — in-progress issue work; still open, so GitHub is tracking it. Don't backfill it as an open task bullet.
+  - Agent pipeline mechanics: "Watson opened PR #42," "Holmes requested changes on #17," "triaged 6 issues into Ready."
+- ✅ **Harvest** — decisions and insights with no GitHub tracking home: "decided to kill the mobile roadmap," "cut the v2 scope down to the launcher." These are Mike's calls, not work tracked in an issue/PR, so they pass the normal high-signal bar and land like any other decision.
 
-When in doubt, the test is *who decided and what tracks it*: an agent moving work through the board → exclude; Mike making a call he'd want to remember → harvestable.
+When in doubt: **GitHub-tracked work (code changes, commits, PR activity, open issues) → exclude; decisions or insights without a GitHub issue/PR as their home → normal signal bar.**
 
 ### Failure mode — skip, never fail
 
@@ -322,7 +326,7 @@ If SessionStart already prompted some habits earlier today (and Mike answered), 
 
 **Chapter mark at start:** `mcp__ccd_session__mark_chapter(title="Review")` (full tiers) or `mcp__ccd_session__mark_chapter(title="Disposition")` (weekly light mode).
 
-**Every unfinished or dropped item gets inspected.** No batching, no fast path — *with one scoped exception:* items that reference a GitHub issue/PR get a disposition-only fast-path (see "GitHub issue/PR fast-path" below), because The Index already holds their story. Every other item gets the full reflective look. This is Ryder's "friction is the feature" principle — the act of reconsidering each item *is* the practice.
+**Every unfinished or dropped item gets inspected.** No batching, no fast path — *with one scoped exception:* items that reference a GitHub issue/PR get a disposition-only fast-path (see "GitHub issue/PR fast-path" below), because the GitHub issue/PR is already their system of record, whoever drove the work. Every other item gets the full reflective look. This is Ryder's "friction is the feature" principle — the act of reconsidering each item *is* the practice.
 
 **Mode differs by tier:**
 - **Full mode (daily/monthly/yearly):** each item gets a reflective look — feelings, meaning, decision. Use the steps below as written.
@@ -347,7 +351,7 @@ Compose a single ordered list:
 - the pattern `#\d+` (e.g., `#42`), OR
 - a URL matching `github.com/.*/issues/` or `.*/pull/` (e.g., `https://github.com/mike-bronner/workbench-bujo/pull/6`).
 
-An item that matches is **fast-pathed**: give it a *lightweight disposition pass only* — **Carry forward / Drop / Complete**, asked plainly. **No feelings probe, no "how did this land?" angle, no mandatory-probe treatment.** These items are pipeline trackers, not lived experiences; The Index holds their real story. Reflecting on them is friction without payoff. Skip steps 2–4 below for these items and go straight to disposition (step 5).
+An item that matches is **fast-pathed**: give it a *lightweight disposition pass only* — **Carry forward / Drop / Complete**, asked plainly. **No feelings probe, no "how did this land?" angle, no mandatory-probe treatment.** These items are GitHub-tracked work, not lived experiences; their real story lives in the GitHub issue/PR — the system of record, whoever drove the work. Reflecting on them is friction without payoff. Skip steps 2–4 below for these items and go straight to disposition (step 5).
 
 **Source-agnostic:** the fast-path applies to a matching item *regardless of how it arrived on the note* — harvested from a session summary, captured manually mid-day, or migrated from an earlier daily. What matters is the `#\d+`/URL reference in the text, nothing else.
 
@@ -423,7 +427,7 @@ For routine items (no salience signal, no priority prefix, completed cleanly wit
 ### Hard rules for Step 3
 
 - **Every item gets a real look.** No batching through with "carry, drop, schedule, or done?" This is the core departure from a task-review checklist: each item is processed, not dispositioned.
-- **GitHub issue/PR items are fast-pathed — disposition only, never reflected on.** Any item whose text carries a `#\d+` reference or a `github.com/.*/issues/` or `.*/pull/` URL gets a plain Carry-forward / Drop / Complete pass with no feelings probe and no mandatory-probe treatment — The Index is the system of record for that pipeline work, so reflecting on it here is friction without payoff. The fast-path keys on the explicit reference, not the topic: a referenceless task like `• Research GitHub Actions caching` is a normal item and gets the full review. This rule holds regardless of how the item reached the note (harvested, manually captured, or migrated).
+- **GitHub issue/PR items are fast-pathed — disposition only, never reflected on.** Any item whose text carries a `#\d+` reference or a `github.com/.*/issues/` or `.*/pull/` URL gets a plain Carry-forward / Drop / Complete pass with no feelings probe and no mandatory-probe treatment — GitHub is the system of record for that work, whoever drove it, so reflecting on it here is friction without payoff. The fast-path keys on the explicit reference, not the topic: a referenceless task like `• Research GitHub Actions caching` is a normal item and gets the full review. This rule holds regardless of how the item reached the note (harvested, manually captured, or migrated).
 - **Ryder's migration-fatigue principle:** an item migrated 3+ times without action is a signal. Push harder on those. Use the orchestrator's `migrated_thrice` flag if present.
 - **Never force feelings.** "No feeling here" is a complete answer. Move on.
 - **Never pre-interpret** what a feeling means. Surface it; let Mike name it.
@@ -471,7 +475,7 @@ After this call, yesterday's note shows `> Ship the orchestrator agent`, `<s>•
 
 **Chapter mark at start:** `mcp__ccd_session__mark_chapter(title="Scaffold <tier>")` — e.g., `"Scaffold today"`, `"Scaffold month"`.
 
-Step 4 has two parts: **mechanical scaffold** (calendar + Future Log surfacers — always) and **reflection capture** (paraphrased summaries of what Mike said in Steps 2/3 — only when the interactive reflection actually produced something worth capturing, and only with per-item confirmation).
+Step 4 has two parts: **mechanical scaffold** (calendar events + interactive Future Log triage — always runs) and **reflection capture** (paraphrased summaries of what Mike said in Steps 2/3 — only when the interactive reflection actually produced something worth capturing, and only with per-item confirmation).
 
 ### Part A — Mechanical scaffold
 
@@ -484,34 +488,73 @@ Part A is two operations, not one:
 - `sections` containing ONLY:
   - **Calendar events** for the period (via DataSource backend when implemented; until then, ask Mike or skip)
 
-**A2. Surface Future Log items via `surface`, NOT via scaffold sections.** Surfacing is a *move*, not a *copy* — the entry leaves the Future Log entirely and lands on the new period's note. Use `bujo_scan` + `bujo_apply_decisions:surface`:
+**A2. Triage Future Log surfacers one-by-one — present each item, THEN dispatch.** A surfacing item is **never** carried forward automatically. The old A2 copied every Future Log entry onto today the moment its date arrived, so Mike had no say over what actually carried — exactly the friction this step removes. Each surfacing entry now gets a per-item `AskUserQuestion` triage **before** any `bujo_apply_decisions` call; only the dispositions Mike picks are dispatched. When Mike picks **Carry forward**, the disposition uses the `surface` op (**not** `migrate`) so the entry leaves the Future Log entirely — no `>` stub accumulates.
 
 ```
-1. bujo_scan(scope=["future_log"], filter={status: "surfaces_today"})
-   → returns items whose inline date `[YYYY-MM-DD]` matches today AND
-     whose signifier is open or scheduled (resolved entries are
-     excluded by the scan, see ≥0.9.5 filter behavior).
+1. Scan the Future Log for items to triage:
+   bujo_scan(scope=["future_log"], filter={status: "surfaces_today"})
+     → items whose inline date `[YYYY-MM-DD]` == today AND whose
+       signifier is open or scheduled (resolved entries are excluded
+       by the scan, see ≥0.9.5 filter behavior).
+   bujo_scan(scope=["future_log"], filter={status: "overdue"})
+     → entries whose date already passed but were never surfaced
+       (e.g., the daily ritual was skipped on that date). Triage
+       these the SAME way — per item, never auto-carried.
 
-2. For each item, dispatch on the Future Log:
-   bujo_apply_decisions(
-     note: "future_log",
-     decisions: [
-       { op: "surface", bullet: <scan_item.text>, target: "today" }
-     ]
-   )
+2. If BOTH scans return nothing, A2 is done — skip it silently. No
+   prompt, no "nothing to surface" narration.
 ```
 
-The `surface` op's effect:
-- **Future Log source** → the entry (and any sub-items) is **removed entirely** — no `>` stub is left behind. The Future Log only ever holds pending scheduled entries (`<`); it never accumulates historical or resolved ones.
-- **Today's note** → fresh open task appended with the same text (including the `[YYYY-MM-DD]` date prefix as provenance). A `scheduled`/`<` entry re-opens as a `•` task; an `event` stays an event.
+**Present each surfacing item via `AskUserQuestion` (the structured tool call, per "How to ask" above — never prose).** One item per `question`; batch up to 4 items into a single call. Show the item's **full text and original scheduled date in the `preview` field** so the context lives on hover, not in chat:
 
-Both sides are atomic from the caller's perspective — a bullet that can't be matched (`NOT_FOUND` / `AMBIGUOUS_BULLET`) lands in `unmatched` and mutates neither note.
+```jsonc
+AskUserQuestion({
+  questions: [{
+    question: "Future Log item surfaces today — what do you want to do with it?",
+    header: "Future Log",
+    multiSelect: false,
+    options: [
+      { label: "Carry forward", description: "Move onto today's note",             preview: "<scan_item.text> — scheduled <scan_item.due>" },
+      { label: "Drop",          description: "Let it go — drop on the Future Log",  preview: "<scan_item.text> — scheduled <scan_item.due>" },
+      { label: "Reschedule",    description: "Pick a new date — update in place",   preview: "<scan_item.text> — scheduled <scan_item.due>" },
+      { label: "Mark complete", description: "Already done — complete on Future Log", preview: "<scan_item.text> — scheduled <scan_item.due>" }
+    ]
+  }]
+})
+```
 
-Also surface **overdue** Future Log items the same way: `bujo_scan(scope=["future_log"], filter={status: "overdue"})` → `surface` each. These are entries whose date passed but were never surfaced (e.g., the daily ritual was skipped on that date) — they're added to today, not marked `>`.
+For an **overdue** item, frame the question as overdue and keep its original date visible (e.g., `question: "Overdue Future Log item (was scheduled <scan_item.due>) — what do you want to do with it?"`). The four options are identical; only the framing changes.
 
-**Why `surface`, not migrate or scaffold-add:** scaffold writes to today only — it has no mechanism to resolve the Future Log entry, so the same entry would surface every morning forever (Mike has reported exactly this bug). `migrate` would close that loop but leaves a `>` stub, turning the Future Log into a growing historical pile. `surface` is the purpose-built op: it removes the source and appends to today in one atomic call, keeping the Future Log clean.
+**Map each pick to a decision — three of the four mutate the Future Log only; only Carry forward reaches today:**
 
-**Do NOT add "surfaced items" to scaffold sections.** Step 3's `migrate` decisions already appended carry-forward items via the scribe's cross-note effect. Same applies to A2's Future Log surfacers — the `surface` op handles target append on its own.
+| Mike picked | Decision op | Effect on the Future Log entry |
+|---|---|---|
+| Carry forward | `surface` (target `today`) | Source entry (and any sub-items) **removed entirely** from the Future Log — no `>` stub. Cross-note: fresh `•` task appended to today, carrying the same text (incl. `[YYYY-MM-DD]` prefix as provenance); a `scheduled`/`<` entry re-opens as a `•` task, an `event` stays an event. **This is the only option that lands anything on today.** |
+| Drop | `drop` | Source line gets `<s>…</s>` strikethrough. Nothing reaches today. |
+| Reschedule | `update` | Ask Mike for the new date (must be future), then rewrite the entry's date tag in place: `new_text` = the original text with its `[YYYY-MM-DD]` prefix swapped for the new date. The entry stays on the Future Log and surfaces again on the new date. (Use `update`, **not** `schedule` — `schedule` would append a *second* Future Log entry, duplicating the item.) |
+| Mark complete | `complete` | Source line signifier → `×` (completed). The item was never carried, so completion stamps the **Future Log entry itself** — there's no today line to complete. |
+
+**Batch the dispatch — one Future Log call.** Collect every disposition into a SINGLE `bujo_apply_decisions(note: "future_log", …)` call; the `surface` op's cross-note effect handles the lone write to today on its own. Don't dispatch per item.
+
+```jsonc
+bujo_apply_decisions({
+  note: "future_log",
+  decisions: [
+    { op: "surface",  bullet: "[2026-06-26] Renew passport",          target: "today" },
+    { op: "drop",     bullet: "[2026-06-26] Cancel old subscription" },
+    { op: "update",   bullet: "[2026-06-26] Book dentist",            new_text: "[2026-07-10] Book dentist" },
+    { op: "complete", bullet: "[2026-06-26] Submit expense report" }
+  ]
+})
+```
+
+**Verification (mandatory):** check the returned `diff` and `unmatched`. If a decision lands in `unmatched` (e.g. `NOT_FOUND` / `AMBIGUOUS_BULLET` — the anchor didn't match or matched two entries), tell Mike which item and retry with the exact `text` from the scan. Both `unmatched` reasons mutate neither note. Don't silently drop a disposition.
+
+**Why triage, not blind carry-forward:** scaffold-add can't mark a Future Log entry resolved, so an entry copied to today by scaffold surfaces every morning forever — Mike reported exactly that bug. The first fix overcorrected into auto-migrate, which closes the loop but takes the choice away from Mike. Per-item triage is the correct middle: every surfacing entry leaves the queue the way Mike chose (carried / dropped / completed / rescheduled to a new date), so nothing surfaces forever **and** nothing carries onto today without his say.
+
+**Why `surface` for Carry forward, not `migrate`:** `migrate` would close the surface-forever loop but leaves a `>` stub, turning the Future Log into a growing historical pile (the issue #14 complaint). `surface` removes the source and appends to today in one atomic call — the Future Log only ever holds pending scheduled entries (`<`), never resolved or migrated ones. The append is made durable **before** the source deletion commits, so a mid-sequence failure leaves a recoverable duplicate, never an entry lost from both notes.
+
+**Do NOT add "carried items" to scaffold sections.** A Carry-forward's `surface` op already appends the task to today via the scribe's cross-note effect, exactly as Step 3's migrate decisions do for yesterday's items. Scaffold-add would double-write.
 
 Setup-time ordering (events → tasks → notes) is applied by the MCP automatically. Don't pre-sort.
 
@@ -564,7 +607,7 @@ If reflection produced nothing capturable (Mike's check-in was "fine, ready to g
 
 ### Tier-specific notes
 
-- **daily:** Part A scaffolds today (calendar events + Future Log surfacers). Part B writes captures to **yesterday** — yesterday is the artifact being completed.
+- **daily:** Part A scaffolds today (calendar events + per-item Future Log triage). Part B writes captures to **yesterday** — yesterday is the artifact being completed.
 - **monthly:** Part A scaffolds this month (Future Log surfacers landing in this month + habit-tracker carry-forward, see below). Part B writes captures to last month's monthly note — themes Mike named about the month that just ended.
 - **yearly:** Part A scaffolds this year (Future Log entries for the new year). Part B writes captures to last year's yearly note — themes Mike named about the year that just ended.
 - **weekly (light):** Part A only. Weekly skips deep reflection, so there's rarely capturable content. If Mike said something worth keeping during item review, follow the same confirm-before-write protocol — target is the previous week's daily where the item lived (often clearer than a "previous week" note since weekly notes don't accumulate the same way).
