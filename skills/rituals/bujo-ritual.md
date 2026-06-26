@@ -55,6 +55,17 @@ AskUserQuestion({
 
 That's prose rendering. There are no buttons. The user has to type anyway. The UI doesn't know the session is waiting. **Always invoke the tool.**
 
+### 🛑 Lead with the question — never narrate what you're *about* to ask
+
+The sibling failure mode, and the one that strands unattended overnight runs: instead of asking the first question, the agent writes a prose summary of everything it's *about* to do, then stops — e.g.:
+
+> **Awaiting Mike for:**
+> The check-in (what happened yesterday / how it landed / what carries forward), habit check-in, disposition of the open task, migration of overdue Future Log items, scaffold of today's note, and priorities for the day.
+
+**That is not asking — it's a status report that leaves nothing pending.** Listing the steps you're *going* to take is never a substitute for taking the first one. When you reach **any** interactive step (Step 2 check-in, Step 2.5 habits, Step 3 disposition, Step 5 planning), your first action is the `AskUserQuestion` tool call for that step's first prompt: no "here's what's coming," no "awaiting Mike for…," no enumerated queue of upcoming questions. Ask the first question; the tool call itself is the signal that the session is waiting.
+
+This bites hardest on an unattended run (a scheduled overnight pre-seed). There's no one to read a "waiting for" list, and a narrated summary pauses on prose with **no question pending** — so the morning session looks finished when nothing was actually asked. The correct shape is always: **invoke `AskUserQuestion`, then pause on the unanswered tool call.** Pause *on the question*, never *instead of* it.
+
 ---
 
 **Two prompt patterns, both delivered via tool calls:**
@@ -692,3 +703,4 @@ Don't narrate what you did. The note itself is the artifact.
 12. **Batch mutations per note.** One `bujo_apply_decisions` call per note per step where possible.
 13. **Tier-appropriate weight.** A daily isn't a yearly. Don't speed-run yearly like a daily, don't depth-dive daily like a yearly. Weekly is deliberately lightweight — don't turn it into a monthly.
 14. **Yearly only: Future Log rollover.** Clean stale entries during the yearly ritual — don't let the Future Log accumulate indefinitely.
+15. **Lead with the question; never narrate pending steps.** At every interactive step, your first action is the `AskUserQuestion` tool call for that step's first prompt — never a prose summary of what you're about to ask. Output of the form "Awaiting Mike for: [list of steps]" is forbidden: it asks nothing and leaves the session looking complete. On an unattended run, invoke `AskUserQuestion` and pause on the unanswered call — pause *on the question*, never *instead of* it. See "Lead with the question" under INTERACTIVITY IS THE POINT.
