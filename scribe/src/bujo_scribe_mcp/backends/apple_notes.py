@@ -37,8 +37,20 @@ _OSASCRIPT_TIMEOUT_SECONDS = 30
 
 
 def _as_quote(value: str) -> str:
-    """Quote a Python string for safe interpolation into an AppleScript literal."""
-    escaped = value.replace("\\", "\\\\").replace('"', '\\"')
+    """Quote a Python string for safe interpolation into an AppleScript literal.
+
+    Escapes backslash and double-quote (so the value can't break out of the
+    literal), then newlines and carriage returns — a raw newline would
+    otherwise terminate the AppleScript string literal mid-value. Backslash is
+    escaped first so a real ``\\n`` in the input survives as a literal
+    backslash-then-n, distinct from a newline rendered as ``\\n``.
+    """
+    escaped = (
+        value.replace("\\", "\\\\")
+        .replace('"', '\\"')
+        .replace("\n", "\\n")
+        .replace("\r", "\\r")
+    )
     return f'"{escaped}"'
 
 
