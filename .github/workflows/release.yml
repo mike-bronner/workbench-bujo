@@ -51,8 +51,8 @@ jobs:
             echo "::error::Version must be SemVer X.Y.Z, got: $NEW_VERSION"
             exit 1
           fi
-          if git rev-parse "v$NEW_VERSION" >/dev/null 2>&1; then
-            echo "::error::Tag v$NEW_VERSION already exists"
+          if git rev-parse "$NEW_VERSION" >/dev/null 2>&1; then
+            echo "::error::Tag $NEW_VERSION already exists"
             exit 1
           fi
           CURRENT=$(jq -r '.version' .claude-plugin/plugin.json)
@@ -138,9 +138,9 @@ jobs:
           fi
 
           git commit -m "${NEW_VERSION}: ${DESC}"
-          git tag -a "v${NEW_VERSION}" -m "v${NEW_VERSION} — ${DESC}"
+          git tag -a "${NEW_VERSION}" -m "${NEW_VERSION} — ${DESC}"
           git push origin main
-          git push origin "v${NEW_VERSION}"
+          git push origin "${NEW_VERSION}"
 
       - name: Create GitHub release
         env:
@@ -149,15 +149,15 @@ jobs:
           DESC: ${{ inputs.description }}
         run: |
           set -euo pipefail
-          PREV_TAG=$(git tag --sort=-version:refname | grep -v "v${NEW_VERSION}" | head -1 || true)
+          PREV_TAG=$(git tag --sort=-version:refname | grep -v "${NEW_VERSION}" | head -1 || true)
           if [ -n "$PREV_TAG" ]; then
-            COMPARE="**Diff:** \`${PREV_TAG}...v${NEW_VERSION}\`"
+            COMPARE="**Diff:** \`${PREV_TAG}...${NEW_VERSION}\`"
           else
             COMPARE=""
           fi
 
-          gh release create "v${NEW_VERSION}" \
-            --title "v${NEW_VERSION} — ${DESC}" \
+          gh release create "${NEW_VERSION}" \
+            --title "${NEW_VERSION} — ${DESC}" \
             --notes "## What changed
 
           ${DESC}
@@ -170,7 +170,7 @@ jobs:
 
           ## Auto-pin
 
-          \`update-marketplace-sha.yml\` will fire on this release event and pin v${NEW_VERSION}'s commit SHA in the workbench marketplace." \
+          \`update-marketplace-sha.yml\` will fire on this release event and pin ${NEW_VERSION}'s commit SHA in the workbench marketplace." \
             "scribe/wheels/bujo_scribe_mcp-${NEW_VERSION}-py3-none-any.whl"
 
       # Releases created with GITHUB_TOKEN emit sterile events — they do NOT
@@ -182,4 +182,4 @@ jobs:
           NEW_VERSION: ${{ inputs.version }}
         run: |
           gh workflow run update-marketplace-sha.yml \
-            -R "${GITHUB_REPOSITORY}" -f tag="v${NEW_VERSION}"
+            -R "${GITHUB_REPOSITORY}" -f tag="${NEW_VERSION}"
