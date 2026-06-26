@@ -326,7 +326,7 @@ If SessionStart already prompted some habits earlier today (and Mike answered), 
 
 **Chapter mark at start:** `mcp__ccd_session__mark_chapter(title="Review")` (full tiers) or `mcp__ccd_session__mark_chapter(title="Disposition")` (weekly light mode).
 
-**Every unfinished or dropped item gets inspected.** No batching, no fast path — *with one scoped exception:* items that reference a GitHub issue/PR get a disposition-only fast-path (see "GitHub issue/PR fast-path" below), because The Index already holds their story. Every other item gets the full reflective look. This is Ryder's "friction is the feature" principle — the act of reconsidering each item *is* the practice.
+**Every unfinished or dropped item gets inspected.** No batching, no fast path — *with one scoped exception:* items that reference a GitHub issue/PR get a disposition-only fast-path (see "GitHub issue/PR fast-path" below), because the GitHub issue/PR is already their system of record, whoever drove the work. Every other item gets the full reflective look. This is Ryder's "friction is the feature" principle — the act of reconsidering each item *is* the practice.
 
 **Mode differs by tier:**
 - **Full mode (daily/monthly/yearly):** each item gets a reflective look — feelings, meaning, decision. Use the steps below as written.
@@ -351,7 +351,7 @@ Compose a single ordered list:
 - the pattern `#\d+` (e.g., `#42`), OR
 - a URL matching `github.com/.*/issues/` or `.*/pull/` (e.g., `https://github.com/mike-bronner/workbench-bujo/pull/6`).
 
-An item that matches is **fast-pathed**: give it a *lightweight disposition pass only* — **Carry forward / Drop / Complete**, asked plainly. **No feelings probe, no "how did this land?" angle, no mandatory-probe treatment.** These items are pipeline trackers, not lived experiences; The Index holds their real story. Reflecting on them is friction without payoff. Skip steps 2–4 below for these items and go straight to disposition (step 5).
+An item that matches is **fast-pathed**: give it a *lightweight disposition pass only* — **Carry forward / Drop / Complete**, asked plainly. **No feelings probe, no "how did this land?" angle, no mandatory-probe treatment.** These items are GitHub-tracked work, not lived experiences; their real story lives in the GitHub issue/PR — the system of record, whoever drove the work. Reflecting on them is friction without payoff. Skip steps 2–4 below for these items and go straight to disposition (step 5).
 
 **Source-agnostic:** the fast-path applies to a matching item *regardless of how it arrived on the note* — harvested from a session summary, captured manually mid-day, or migrated from an earlier daily. What matters is the `#\d+`/URL reference in the text, nothing else.
 
@@ -427,7 +427,7 @@ For routine items (no salience signal, no priority prefix, completed cleanly wit
 ### Hard rules for Step 3
 
 - **Every item gets a real look.** No batching through with "carry, drop, schedule, or done?" This is the core departure from a task-review checklist: each item is processed, not dispositioned.
-- **GitHub issue/PR items are fast-pathed — disposition only, never reflected on.** Any item whose text carries a `#\d+` reference or a `github.com/.*/issues/` or `.*/pull/` URL gets a plain Carry-forward / Drop / Complete pass with no feelings probe and no mandatory-probe treatment — The Index is the system of record for that pipeline work, so reflecting on it here is friction without payoff. The fast-path keys on the explicit reference, not the topic: a referenceless task like `• Research GitHub Actions caching` is a normal item and gets the full review. This rule holds regardless of how the item reached the note (harvested, manually captured, or migrated).
+- **GitHub issue/PR items are fast-pathed — disposition only, never reflected on.** Any item whose text carries a `#\d+` reference or a `github.com/.*/issues/` or `.*/pull/` URL gets a plain Carry-forward / Drop / Complete pass with no feelings probe and no mandatory-probe treatment — GitHub is the system of record for that work, whoever drove it, so reflecting on it here is friction without payoff. The fast-path keys on the explicit reference, not the topic: a referenceless task like `• Research GitHub Actions caching` is a normal item and gets the full review. This rule holds regardless of how the item reached the note (harvested, manually captured, or migrated).
 - **Ryder's migration-fatigue principle:** an item migrated 3+ times without action is a signal. Push harder on those. Use the orchestrator's `migrated_thrice` flag if present.
 - **Never force feelings.** "No feeling here" is a complete answer. Move on.
 - **Never pre-interpret** what a feeling means. Surface it; let Mike name it.
