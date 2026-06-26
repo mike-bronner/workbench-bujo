@@ -24,6 +24,7 @@ PROTOCOL = REPO / "skills" / "rituals" / "bujo-ritual.md"
 
 OLD_GENERIC_OPENER = "how did yesterday go"
 NEW_OPENER_CUE = "what went well yesterday"
+ESCAPE_HATCHES = ("pass — skip today", "come back to this")
 
 
 def _daily_matrix_row(text: str) -> str:
@@ -94,11 +95,34 @@ def test_step2_prunes_open_tasks_during_checkin():
     )
 
 
+def test_step2_angles_in_canonical_order():
+    """AC #8: the three angles stay aligned in order — wins/lessons (angle 1)
+    before the brain dump (angle 2) before the open-task prune (angle 3). The
+    presence tests above would all stay green if the angles were reordered, so
+    this positional guard protects the alignment the AC explicitly names."""
+    step2 = _step2(PROTOCOL.read_text())
+    wins = step2.index("lead with wins")
+    brain_dump = step2.index("brain dump")
+    prune = step2.index("eliminat")
+    assert wins < brain_dump < prune, (
+        "Step 2 angles are out of order — expected wins/lessons → brain dump → "
+        f"prune, got positions wins={wins}, brain dump={brain_dump}, prune={prune}."
+    )
+
+
 def test_escape_hatches_preserved():
-    """AC #7: the skip/defer escape hatches survive on the AskUserQuestion opener."""
-    text = PROTOCOL.read_text().lower()
-    assert "pass — skip today" in text, "The 'Pass — skip today' escape hatch is missing."
-    assert "come back to this" in text, "The 'Come back to this' escape hatch is missing."
+    """AC #7: the skip/defer escape hatches survive on each AskUserQuestion
+    ``Check-in`` opener block — not merely somewhere in the document. Both labels
+    also appear in the prose 'INCORRECT' counter-example (``:53-54``) and in Step 5
+    planning (``:640`` onward), so a whole-file check would still pass even if the
+    ``options`` arrays were stripped from the opener blocks themselves — exactly
+    the AC #7 regression this test exists to catch."""
+    for block in _checkin_opener_blocks(PROTOCOL.read_text()):
+        low = block.lower()
+        for hatch in ESCAPE_HATCHES:
+            assert hatch in low, (
+                f"A Check-in AskUserQuestion block is missing the '{hatch}' escape hatch."
+            )
 
 
 def test_checkin_askuserquestion_blocks_carry_structured_opener():
