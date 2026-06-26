@@ -246,6 +246,26 @@ class DecisionSchedule(BaseModel):
     date: str  # YYYY-MM-DD
 
 
+class DecisionSurface(BaseModel):
+    """Surface a Future Log entry onto a daily/period note when it comes due.
+
+    The inverse of `schedule`. Unlike `migrate` (which leaves a `>` stub on
+    the source as a historical record), `surface` **removes** the source
+    bullet and its sub-items entirely — the Future Log only ever holds
+    pending scheduled entries, never resolved or historical ones. The
+    removal of the source branch is atomic with the cross-note append to
+    `target`: if the bullet can't be matched (`NOT_FOUND` / `AMBIGUOUS_BULLET`)
+    neither note is mutated.
+
+    On the target note the entry re-emits as an open task (`scheduled`
+    entries become `task`; an `event` stays an `event`), carrying its text
+    — including the `[YYYY-MM-DD]` provenance prefix — and prefix."""
+
+    op: Literal["surface"]
+    bullet: str
+    target: str
+
+
 class DecisionDrop(BaseModel):
     op: Literal["drop"]
     bullet: str
@@ -364,6 +384,7 @@ Decision = (
     DecisionComplete
     | DecisionMigrate
     | DecisionSchedule
+    | DecisionSurface
     | DecisionDrop
     | DecisionUndrop
     | DecisionAdd

@@ -171,6 +171,10 @@ decisions:
     bullet: "..."
     date: "YYYY-MM-DD"
 
+  - op: surface        # Future Log → day note; REMOVES the source (no `>` stub)
+    bullet: "..."      # the due Future Log entry
+    target: today | monthly_current | <identifier>
+
   - op: drop           # strike through
     bullet: "..."
 
@@ -218,6 +222,7 @@ cross_note_effects:                     # e.g. migrate writes to target too
 **Behavior:**
 - Reads `index`, then reads `note` fresh, then writes.
 - `migrate` mutates BOTH notes (strike/mark `>` in source, append to target) — both appear in `cross_note_effects` and the main `diff`.
+- `surface` is the Future Log surfacer and the inverse of `schedule`: it mutates BOTH notes, **removing** the matched bullet (and its sub-items) from the source Future Log entirely — no `>` stub, unlike `migrate` — and appending a fresh open task to `target` (a `scheduled`/`<` entry re-opens as a `task`; an `event` stays an `event`; provenance text and prefix preserved). Atomic: a `NOT_FOUND` / `AMBIGUOUS_BULLET` match mutates neither note. Use this in the daily/period scaffold so the Future Log only ever holds pending scheduled entries, never historical ones.
 - `combine` mutates BOTH notes: source bullet gets `>` (migrated) just like `migrate`, and a new `sub_item` (depth=1) is inserted on `target_note` **immediately after** the `parent_bullet`. Atomic — if `target_note` is missing (`NOT_FOUND`) or `parent_bullet` can't be resolved (`PARENT_NOT_FOUND` / `AMBIGUOUS_PARENT`), the source is NOT mutated and the decision lands in `unmatched`.
 - `undrop` is the inverse of `drop`: clears the `dropped` flag (removes strikethrough), preserves the signifier and text. If the matched line isn't currently dropped, returns `NOT_DROPPED` — not a silent no-op. Use when a task was dropped in error and needs to come back (e.g., the ritual misinterpreted "combine into X" as "drop").
 - `update_table` (≥0.10) replaces a `TableLine`'s `raw_html` in place. Matches by `anchor` substring within the line's raw_html. 0 matches → `NOT_FOUND`; >1 matches → `AMBIGUOUS_BULLET`. Designed for the habit tracker on the monthly note; the standard `update` op operates on `BujoLine.text` and can't reach table content.

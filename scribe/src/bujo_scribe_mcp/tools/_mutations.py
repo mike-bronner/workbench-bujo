@@ -36,6 +36,7 @@ from bujo_scribe_mcp.schemas import (
     DecisionRemove,
     DecisionReorder,
     DecisionSchedule,
+    DecisionSurface,
     DecisionUndrop,
     DecisionUpdate,
     DecisionUpdateTable,
@@ -587,6 +588,64 @@ def apply_schedule(
         DiffMoved(**{"from": note.title, "to": future_log_slug, "bullet": render_line(fl_lines[0], rules)})
     )
     return (diffs, None, CrossNoteRequest(target_slug=future_log_slug, lines_to_append=fl_lines))
+
+
+def apply_surface(
+    note: ParsedNote,
+    decision: DecisionSurface,
+    rules: Rules,
+) -> tuple[list, str | None, CrossNoteRequest | None]:
+    """Surface a Future Log entry onto `target`, removing it from the source.
+
+    The inverse of `apply_schedule`. Unlike `apply_migrate`, no `>` stub is
+    left behind — the matched bullet and its sub-items are deleted from the
+    Future Log entirely, so the note only ever holds pending scheduled
+    entries. The removal is atomic with the cross-note append: a NOT_FOUND /
+    AMBIGUOUS_BULLET match mutates neither note.
+    """
+    target = _resolve_target(note, decision.bullet)
+    if isinstance(target, str):
+        return ([], target, None)
+
+    descendants = find_descendants(note, target)
+    branch = [target, *descendants]
+
+    # Snapshot the branch as fresh open lines for the target note. The
+    # parent re-opens as a task (a `scheduled`/`migrated` Future Log entry
+    # becomes an actionable `•`; an `event` stays an `event`); descendants
+    # carry as sub-items. Provenance text (incl. the `[YYYY-MM-DD]` prefix)
+    # and any priority/inspiration/explore prefix are preserved.
+    carry_lines: list[BujoLine] = [
+        BujoLine(
+            signifier=target.signifier if target.signifier not in ("scheduled", "migrated") else "task",
+            text=target.text,
+            prefix=target.prefix,
+            depth=target.depth,
+            anchor=target.text[:60],
+        )
+    ]
+    for desc in descendants:
+        carry_lines.append(
+            BujoLine(
+                signifier=desc.signifier if desc.signifier not in ("scheduled", "migrated") else "sub_item",
+                text=desc.text,
+                prefix=desc.prefix,
+                depth=desc.depth,
+                anchor=desc.anchor,
+            )
+        )
+
+    # Remove the entire branch from the source note — by identity, so a
+    # value-equal sibling line is never deleted by accident.
+    diffs: list = [DiffRemoved(bullet=render_line(line, rules)) for line in branch]
+    indices = [i for i, line in enumerate(note.lines) if any(line is b for b in branch)]
+    for i in sorted(indices, reverse=True):
+        del note.lines[i]
+
+    diffs.append(
+        DiffMoved(**{"from": note.title, "to": decision.target, "bullet": render_line(carry_lines[0], rules)})
+    )
+    return (diffs, None, CrossNoteRequest(target_slug=decision.target, lines_to_append=carry_lines))
 
 
 # ---------------------------------------------------------------------------

@@ -60,7 +60,7 @@ That's prose rendering. There are no buttons. The user has to type anyway. The U
 The sibling failure mode, and the one that strands unattended overnight runs: instead of asking the first question, the agent writes a prose summary of everything it's *about* to do, then stops — e.g.:
 
 > **Awaiting Mike for:**
-> The check-in (what happened yesterday / how it landed / what carries forward), habit check-in, disposition of the open task, migration of overdue Future Log items, scaffold of today's note, and priorities for the day.
+> The check-in (what happened yesterday / how it landed / what carries forward), habit check-in, disposition of the open task, surfacing of overdue Future Log items, scaffold of today's note, and priorities for the day.
 
 **That is not asking — it's a status report that leaves nothing pending.** Listing the steps you're *going* to take is never a substitute for taking the first one. When you reach **any** interactive step (Step 2 check-in, Step 2.5 habits, Step 3 disposition, Step 5 planning), your first action is the `AskUserQuestion` tool call for that step's first prompt: no "here's what's coming," no "awaiting Mike for…," no enumerated queue of upcoming questions. Ask the first question; the tool call itself is the signal that the session is waiting.
 
@@ -168,7 +168,7 @@ All I/O goes through `mcp__plugin_workbench-bujo_scribe__*`. Never call Apple No
 
 - `bujo_read` — fetch parsed `lines[]` for each note (scope_notes + current-tier target)
 - `bujo_scaffold` — create/merge the current-tier target
-- `bujo_apply_decisions` — mutate any note (complete, migrate, schedule, drop, add, update, reorder, remove)
+- `bujo_apply_decisions` — mutate any note (complete, migrate, schedule, surface, drop, add, update, reorder, remove)
 - `bujo_scan` — find items by status: `open`, `due_today`, `overdue`, `surfaces_today`, or `unrecognized`. Use `unrecognized` to surface non-BuJo legacy/malformed content for `apply_decisions:remove` cleanup; the returned `text`/`anchor` round-trips into the remove op.
 - `bujo_summarize` — optional summary block
 
@@ -484,7 +484,7 @@ Part A is two operations, not one:
 - `sections` containing ONLY:
   - **Calendar events** for the period (via DataSource backend when implemented; until then, ask Mike or skip)
 
-**A2. Surface Future Log items via migrate, NOT via scaffold sections.** Surfacing is a *move*, not a *copy* — the entry leaves the Future Log and lands on the new period's note. Use `bujo_scan` + `bujo_apply_decisions:migrate`:
+**A2. Surface Future Log items via `surface`, NOT via scaffold sections.** Surfacing is a *move*, not a *copy* — the entry leaves the Future Log entirely and lands on the new period's note. Use `bujo_scan` + `bujo_apply_decisions:surface`:
 
 ```
 1. bujo_scan(scope=["future_log"], filter={status: "surfaces_today"})
@@ -496,20 +496,22 @@ Part A is two operations, not one:
    bujo_apply_decisions(
      note: "future_log",
      decisions: [
-       { op: "migrate", bullet: <scan_item.text>, target: "today" }
+       { op: "surface", bullet: <scan_item.text>, target: "today" }
      ]
    )
 ```
 
-The migrate's effect:
-- **Future Log source** → signifier becomes `>` (migrated). The entry stays on the Future Log as historical record but won't surface again on subsequent days (the post-0.9.5 scan filter excludes migrated lines from `surfaces_today`).
-- **Today's note** → fresh task line appended with the same text (including the `[YYYY-MM-DD]` date prefix as provenance).
+The `surface` op's effect:
+- **Future Log source** → the entry (and any sub-items) is **removed entirely** — no `>` stub is left behind. The Future Log only ever holds pending scheduled entries (`<`); it never accumulates historical or resolved ones.
+- **Today's note** → fresh open task appended with the same text (including the `[YYYY-MM-DD]` date prefix as provenance). A `scheduled`/`<` entry re-opens as a `•` task; an `event` stays an event.
 
-Also surface **overdue** Future Log items the same way: `bujo_scan(scope=["future_log"], filter={status: "overdue"})` → migrate each. These are entries whose date passed but were never migrated (e.g., the daily ritual was skipped on that date).
+Both sides are atomic from the caller's perspective — a bullet that can't be matched (`NOT_FOUND` / `AMBIGUOUS_BULLET`) lands in `unmatched` and mutates neither note.
 
-**Why migrate, not scaffold-add:** scaffold writes to today only. It has no mechanism to mark the Future Log entry as resolved, so the same entry would surface every morning forever. Mike has previously reported exactly this bug — Future Log items getting copied to today but never removed. The migrate op is what closes the loop atomically.
+Also surface **overdue** Future Log items the same way: `bujo_scan(scope=["future_log"], filter={status: "overdue"})` → `surface` each. These are entries whose date passed but were never surfaced (e.g., the daily ritual was skipped on that date) — they're added to today, not marked `>`.
 
-**Do NOT add "migrated items" to scaffold sections.** Step 3's `migrate` decisions already appended carry-forward items via the scribe's cross-note effect. Same applies to A2's Future Log surfacers — the migrate op handles target append on its own.
+**Why `surface`, not migrate or scaffold-add:** scaffold writes to today only — it has no mechanism to resolve the Future Log entry, so the same entry would surface every morning forever (Mike has reported exactly this bug). `migrate` would close that loop but leaves a `>` stub, turning the Future Log into a growing historical pile. `surface` is the purpose-built op: it removes the source and appends to today in one atomic call, keeping the Future Log clean.
+
+**Do NOT add "surfaced items" to scaffold sections.** Step 3's `migrate` decisions already appended carry-forward items via the scribe's cross-note effect. Same applies to A2's Future Log surfacers — the `surface` op handles target append on its own.
 
 Setup-time ordering (events → tasks → notes) is applied by the MCP automatically. Don't pre-sort.
 
