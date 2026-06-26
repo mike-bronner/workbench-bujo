@@ -17,6 +17,9 @@ These pin the contract from issue #14:
 
 from __future__ import annotations
 
+import pytest
+
+from bujo_scribe_mcp.backends.base import BackendError
 from bujo_scribe_mcp.parsing import BujoLine, parse_note
 from bujo_scribe_mcp.schemas import (
     ApplyDecisionsInput,
@@ -245,3 +248,131 @@ def test_surface_then_scan_surfaces_today_returns_nothing(
         ctx=ctx,
     )
     assert after.items == []
+
+
+# ---------------------------------------------------------------------------
+# AC #3 — the source deletion must not commit before the target append
+# ---------------------------------------------------------------------------
+
+
+def test_surface_target_write_failure_keeps_source_entry(
+    make_backend, make_context, render_body, make_bujo_line
+):
+    """If the target-note append fails, the Future Log entry must survive.
+
+    `surface` physically deletes its source branch, so committing the source
+    before the target append is durable would lose the entry from *both* notes
+    on a mid-sequence failure — the *"…or neither"* state AC #3 prohibits. The
+    target append is made durable first, so a failure here leaves the source
+    entry intact (a recoverable duplicate-or-nothing, never a lost task).
+    """
+    fl_body = render_body(
+        FUTURE_LOG_TITLE,
+        [make_bujo_line("scheduled", f"[{TODAY}] Renew the passport")],
+    )
+    target_body = render_body("Target Note", [make_bujo_line("task", "Existing task")])
+    backend = make_backend({FUTURE_LOG_TITLE: fl_body, "Target Note": target_body})
+    ctx = make_context(backend)
+
+    # Make the target-note write fail; the Future Log write stays reachable.
+    real_update = backend.update
+
+    def failing_update(ref, content):
+        if ref.id == "Target Note":
+            raise BackendError("simulated target write failure")
+        return real_update(ref, content)
+
+    backend.update = failing_update  # type: ignore[method-assign]
+
+    with pytest.raises(BackendError, match="simulated target write failure"):
+        _surface(ctx, "Renew the passport")
+
+    # Source survived — the entry is still on the Future Log, still scheduled,
+    # NOT deleted. Better a stuck-but-present entry than a vanished task.
+    fl_lines = _bujo_lines(ctx, FUTURE_LOG_TITLE)
+    assert len(fl_lines) == 1
+    assert "Renew the passport" in fl_lines[0].text
+    assert fl_lines[0].signifier == "scheduled"
+
+
+# ---------------------------------------------------------------------------
+# AC #4 — overdue Future Log items surface the same way as due-today ones
+# ---------------------------------------------------------------------------
+
+
+def test_surface_overdue_entry_removed_and_tasked(
+    make_backend, make_context, render_body, make_bujo_line
+):
+    """An OVERDUE entry (inline date in the past) surfaces identically: removed
+    from the Future Log, appended to the target as a `task` — never a `>`."""
+    overdue_date = "2020-01-01"
+    fl_body = render_body(
+        FUTURE_LOG_TITLE,
+        [make_bujo_line("scheduled", f"[{overdue_date}] Pay the overdue invoice")],
+    )
+    ctx = make_context(make_backend({FUTURE_LOG_TITLE: fl_body}))
+
+    # The `overdue` scan surfaces it (date < today).
+    before = scan.execute(
+        ScanInput(scope=["future_log"], filter=ScanFilter(status="overdue", date=TODAY)),
+        ctx=ctx,
+    )
+    assert len(before.items) == 1
+
+    out = _surface(ctx, "Pay the overdue invoice")
+    assert not out.unmatched
+
+    # Source: gone entirely (not marked `>`).
+    assert _bujo_lines(ctx, FUTURE_LOG_TITLE) == []
+
+    # Target: a fresh open task, not a migrated stub.
+    carried = _line(_bujo_lines(ctx, "Target Note"), "Pay the overdue invoice")
+    assert carried.signifier == "task"
+
+    # The overdue scan now returns nothing — the entry is gone, not filtered.
+    after = scan.execute(
+        ScanInput(scope=["future_log"], filter=ScanFilter(status="overdue", date=TODAY)),
+        ctx=ctx,
+    )
+    assert after.items == []
+
+
+# ---------------------------------------------------------------------------
+# AMBIGUOUS_BULLET — no partial mutation on either note
+# ---------------------------------------------------------------------------
+
+
+def test_surface_ambiguous_bullet_mutates_neither_note(
+    make_backend, make_context, render_body, make_bujo_line
+):
+    """The contract promises NOT_FOUND *and* AMBIGUOUS_BULLET both mutate
+    neither note. Two Future Log entries sharing a text substring make the
+    match ambiguous — `surface` must no-op on both notes."""
+    fl_body = render_body(
+        FUTURE_LOG_TITLE,
+        [
+            make_bujo_line("scheduled", f"[{TODAY}] Call the dentist about a cleaning"),
+            make_bujo_line("scheduled", f"[{TODAY}] Call the dentist again"),
+        ],
+    )
+    target_body = render_body("Target Note", [make_bujo_line("task", "Existing task")])
+    ctx = make_context(
+        make_backend({FUTURE_LOG_TITLE: fl_body, "Target Note": target_body})
+    )
+
+    # "Call the dentist" is a substring of BOTH entries, an exact match of
+    # neither → ambiguous.
+    out = _surface(ctx, "Call the dentist")
+
+    assert len(out.unmatched) == 1
+    assert out.unmatched[0].reason == "AMBIGUOUS_BULLET"
+
+    # Source: both entries still present, still scheduled.
+    fl_lines = _bujo_lines(ctx, FUTURE_LOG_TITLE)
+    assert len(fl_lines) == 2
+    assert all(line.signifier == "scheduled" for line in fl_lines)
+
+    # Target: nothing appended.
+    target_lines = _bujo_lines(ctx, "Target Note")
+    assert len(target_lines) == 1
+    assert target_lines[0].text == "Existing task"
