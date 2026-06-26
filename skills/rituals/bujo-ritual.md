@@ -471,7 +471,7 @@ After this call, yesterday's note shows `> Ship the orchestrator agent`, `<s>•
 
 **Chapter mark at start:** `mcp__ccd_session__mark_chapter(title="Scaffold <tier>")` — e.g., `"Scaffold today"`, `"Scaffold month"`.
 
-Step 4 has two parts: **mechanical scaffold** (calendar + Future Log surfacers — always) and **reflection capture** (paraphrased summaries of what Mike said in Steps 2/3 — only when the interactive reflection actually produced something worth capturing, and only with per-item confirmation).
+Step 4 has two parts: **mechanical scaffold** (calendar events + interactive Future Log triage — always runs) and **reflection capture** (paraphrased summaries of what Mike said in Steps 2/3 — only when the interactive reflection actually produced something worth capturing, and only with per-item confirmation).
 
 ### Part A — Mechanical scaffold
 
@@ -484,32 +484,71 @@ Part A is two operations, not one:
 - `sections` containing ONLY:
   - **Calendar events** for the period (via DataSource backend when implemented; until then, ask Mike or skip)
 
-**A2. Surface Future Log items via migrate, NOT via scaffold sections.** Surfacing is a *move*, not a *copy* — the entry leaves the Future Log and lands on the new period's note. Use `bujo_scan` + `bujo_apply_decisions:migrate`:
+**A2. Triage Future Log surfacers one-by-one — present each item, THEN dispatch.** A surfacing item is **never** migrated automatically. The old A2 copied every Future Log entry onto today the moment its date arrived, so Mike had no say over what actually carried — exactly the friction this step removes. Each surfacing entry now gets a per-item `AskUserQuestion` triage **before** any `bujo_apply_decisions` call; only the dispositions Mike picks are dispatched.
 
 ```
-1. bujo_scan(scope=["future_log"], filter={status: "surfaces_today"})
-   → returns items whose inline date `[YYYY-MM-DD]` matches today AND
-     whose signifier is open or scheduled (resolved entries are
-     excluded by the scan, see ≥0.9.5 filter behavior).
+1. Scan the Future Log for items to triage:
+   bujo_scan(scope=["future_log"], filter={status: "surfaces_today"})
+     → items whose inline date `[YYYY-MM-DD]` == today AND whose
+       signifier is open or scheduled (resolved entries are excluded
+       by the scan, see ≥0.9.5 filter behavior).
+   bujo_scan(scope=["future_log"], filter={status: "overdue"})
+     → entries whose date already passed but were never migrated
+       (e.g., the daily ritual was skipped on that date). Triage
+       these the SAME way — per item, never auto-migrated.
 
-2. For each item, dispatch on the Future Log:
-   bujo_apply_decisions(
-     note: "future_log",
-     decisions: [
-       { op: "migrate", bullet: <scan_item.text>, target: "today" }
-     ]
-   )
+2. If BOTH scans return nothing, A2 is done — skip it silently. No
+   prompt, no "nothing to surface" narration.
 ```
 
-The migrate's effect:
-- **Future Log source** → signifier becomes `>` (migrated). The entry stays on the Future Log as historical record but won't surface again on subsequent days (the post-0.9.5 scan filter excludes migrated lines from `surfaces_today`).
-- **Today's note** → fresh task line appended with the same text (including the `[YYYY-MM-DD]` date prefix as provenance).
+**Present each surfacing item via `AskUserQuestion` (the structured tool call, per "How to ask" above — never prose).** One item per `question`; batch up to 4 items into a single call. Show the item's **full text and original scheduled date in the `preview` field** so the context lives on hover, not in chat:
 
-Also surface **overdue** Future Log items the same way: `bujo_scan(scope=["future_log"], filter={status: "overdue"})` → migrate each. These are entries whose date passed but were never migrated (e.g., the daily ritual was skipped on that date).
+```jsonc
+AskUserQuestion({
+  questions: [{
+    question: "Future Log item surfaces today — what do you want to do with it?",
+    header: "Future Log",
+    multiSelect: false,
+    options: [
+      { label: "Carry forward", description: "Migrate onto today's note",          preview: "<scan_item.text> — scheduled <scan_item.due>" },
+      { label: "Drop",          description: "Let it go — drop on the Future Log",  preview: "<scan_item.text> — scheduled <scan_item.due>" },
+      { label: "Reschedule",    description: "Pick a new date — update in place",   preview: "<scan_item.text> — scheduled <scan_item.due>" },
+      { label: "Mark complete", description: "Already done — complete on Future Log", preview: "<scan_item.text> — scheduled <scan_item.due>" }
+    ]
+  }]
+})
+```
 
-**Why migrate, not scaffold-add:** scaffold writes to today only. It has no mechanism to mark the Future Log entry as resolved, so the same entry would surface every morning forever. Mike has previously reported exactly this bug — Future Log items getting copied to today but never removed. The migrate op is what closes the loop atomically.
+For an **overdue** item, frame the question as overdue and keep its original date visible (e.g., `question: "Overdue Future Log item (was scheduled <scan_item.due>) — what do you want to do with it?"`). The four options are identical; only the framing changes.
 
-**Do NOT add "migrated items" to scaffold sections.** Step 3's `migrate` decisions already appended carry-forward items via the scribe's cross-note effect. Same applies to A2's Future Log surfacers — the migrate op handles target append on its own.
+**Map each pick to a decision — three of the four mutate the Future Log only; only Carry forward reaches today:**
+
+| Mike picked | Decision op | Effect on the Future Log entry |
+|---|---|---|
+| Carry forward | `migrate` (target `today`) | Source line signifier → `>` (migrated). Cross-note: fresh `•` task appended to today, carrying the same text (incl. `[YYYY-MM-DD]` prefix as provenance). **This is the only option that lands anything on today.** |
+| Drop | `drop` | Source line gets `<s>…</s>` strikethrough. Nothing reaches today. |
+| Reschedule | `update` | Ask Mike for the new date (must be future), then rewrite the entry's date tag in place: `new_text` = the original text with its `[YYYY-MM-DD]` prefix swapped for the new date. The entry stays on the Future Log and surfaces again on the new date. (Use `update`, **not** `schedule` — `schedule` would append a *second* Future Log entry, duplicating the item.) |
+| Mark complete | `complete` | Source line signifier → `×` (completed). The item was never migrated, so completion stamps the **Future Log entry itself** — there's no today line to complete. |
+
+**Batch the dispatch — one Future Log call.** Collect every disposition into a SINGLE `bujo_apply_decisions(note: "future_log", …)` call; the migrate op's cross-note effect handles the lone write to today on its own. Don't dispatch per item.
+
+```jsonc
+bujo_apply_decisions({
+  note: "future_log",
+  decisions: [
+    { op: "migrate",  bullet: "[2026-06-26] Renew passport",          target: "today" },
+    { op: "drop",     bullet: "[2026-06-26] Cancel old subscription" },
+    { op: "update",   bullet: "[2026-06-26] Book dentist",            new_text: "[2026-07-10] Book dentist" },
+    { op: "complete", bullet: "[2026-06-26] Submit expense report" }
+  ]
+})
+```
+
+**Verification (mandatory):** check the returned `diff` and `unmatched`. If a decision lands in `unmatched` (e.g. `NOT_FOUND` — the anchor didn't match), tell Mike which item and retry with the exact `text` from the scan. Don't silently drop a disposition.
+
+**Why triage, not blind migrate:** scaffold-add can't mark a Future Log entry resolved, so an entry copied to today by scaffold surfaces every morning forever — Mike reported exactly that bug. The first fix overcorrected into auto-migrate, which closes the loop but takes the choice away from Mike. Per-item triage is the correct middle: every surfacing entry leaves the queue the way Mike chose (migrated / dropped / completed / rescheduled to a new date), so nothing surfaces forever **and** nothing carries onto today without his say.
+
+**Do NOT add "migrated items" to scaffold sections.** A Carry-forward's `migrate` op already appends the task to today via the scribe's cross-note effect, exactly as Step 3's migrate decisions do for yesterday's items. Scaffold-add would double-write.
 
 Setup-time ordering (events → tasks → notes) is applied by the MCP automatically. Don't pre-sort.
 
@@ -562,7 +601,7 @@ If reflection produced nothing capturable (Mike's check-in was "fine, ready to g
 
 ### Tier-specific notes
 
-- **daily:** Part A scaffolds today (calendar events + Future Log surfacers). Part B writes captures to **yesterday** — yesterday is the artifact being completed.
+- **daily:** Part A scaffolds today (calendar events + per-item Future Log triage). Part B writes captures to **yesterday** — yesterday is the artifact being completed.
 - **monthly:** Part A scaffolds this month (Future Log surfacers landing in this month + habit-tracker carry-forward, see below). Part B writes captures to last month's monthly note — themes Mike named about the month that just ended.
 - **yearly:** Part A scaffolds this year (Future Log entries for the new year). Part B writes captures to last year's yearly note — themes Mike named about the year that just ended.
 - **weekly (light):** Part A only. Weekly skips deep reflection, so there's rarely capturable content. If Mike said something worth keeping during item review, follow the same confirm-before-write protocol — target is the previous week's daily where the item lived (often clearer than a "previous week" note since weekly notes don't accumulate the same way).
