@@ -103,7 +103,7 @@ Inside Claude Code:
 /workbench-bujo:bujo-setup
 ```
 
-Walks configuration, deploys the single scheduled task, offers legacy cleanup.
+Walks configuration, deploys the single scheduled task (local runs only), offers legacy cleanup.
 
 ## Commands
 
@@ -128,6 +128,8 @@ Capture is **manual**: invoke `/workbench-bujo:bujo-capture` when something land
 | `bujo-ritual` | `0 7 * * *` | Runs daily at 7am. Orchestrator fires any applicable higher tiers in strict order: yearly (Jan 1) → monthly (1st of month) → weekly (Sunday) → daily (always). |
 
 No prerequisite chain is needed because the unified flow always runs tiers in the correct order.
+
+The scheduled task is **local only**. It lives in the desktop app's scheduler and the ritual touches Apple Notes on the Mac, so `/workbench-bujo:bujo-setup` deploys it only when run locally (the Claude desktop app / Cowork, or the CLI). Run in a cloud session, setup still writes your config but skips the task — re-run it locally to schedule the ritual.
 
 ## How rituals work
 

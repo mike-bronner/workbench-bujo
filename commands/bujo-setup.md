@@ -7,16 +7,18 @@ The user has invoked `/workbench-bujo:bujo-setup`. Walk them through configuring
 ## What setup produces
 
 - **One config file** at `~/.claude/plugins/data/workbench-bujo-claude-workbench/config.json`
-- **One scheduled task** — `/workbench-bujo:bujo` fires daily at 7am (configurable). The `bujo-orchestrator` agent determines which tiers (yearly, monthly, weekly, daily) apply and chains them in order.
+- **One scheduled task** (local only) — `/workbench-bujo:bujo` fires daily at 7am (configurable). The `bujo-orchestrator` agent determines which tiers (yearly, monthly, weekly, daily) apply and chains them in order. Deployed **only when setup runs in a local environment** (the Claude desktop app / Cowork, or the CLI) where the scheduled-tasks MCP is reachable. The ritual reads and writes Apple Notes and runs on the local scheduler, so there's nothing to deploy in a cloud session — setup skips this step there and completes everything else.
 - **Optional user rules override** at `~/.claude/plugins/data/workbench-bujo-claude-workbench/rules.yaml` — users customize signifiers and extensions here (not set up by this command; see plugin README).
 
 ## Step 1 — Check Prerequisites
 
 1. **Core plugin:** Check if `~/.claude/plugins/data/workbench-core-claude-workbench/config.json` exists (fall back to the legacy `workbench-claude-workbench/config.json` if not). If neither, warn: "The workbench-core plugin must be configured first. Run `/workbench-core:customize`."
 2. **Scribe MCP:** Try any `mcp__plugin_workbench-bujo_scribe__*` tool (e.g., `bujo_read` with `notes: ["index"]`). If it fails, warn: "The bujo-scribe MCP isn't reachable. Run `uv tool install bujo-scribe-mcp` and reload Claude Code."
-3. **Scheduled tasks MCP:** Try `mcp__scheduled-tasks__list_scheduled_tasks`. If it fails, warn: "Scheduled tasks MCP is not available."
+3. **Scheduled tasks MCP (environment probe, not a blocker):** Try `mcp__scheduled-tasks__list_scheduled_tasks`.
+   - **If it responds** → you're in a local environment (desktop app / Cowork or CLI). Set `SCHEDULING_AVAILABLE = true`. Steps 6 and 7 will deploy and clean up the local scheduled task.
+   - **If it fails or the tool isn't available** → you're almost certainly in a cloud session with no local scheduler. Set `SCHEDULING_AVAILABLE = false` and **do not stop** — the local scheduled task simply can't (and shouldn't) be deployed here. The rest of setup (config, permissions, journal checks) still runs. Note to the user: "Running without a local scheduler — I'll write your config but skip deploying the daily ritual task. Re-run `/workbench-bujo:bujo-setup` from the Claude desktop app (Cowork) or CLI on your Mac to deploy it."
 
-If any prerequisite fails, stop and explain what needs to be set up first.
+Only prerequisites 1 and 2 are blockers. If either fails, stop and explain what needs to be set up first. Prerequisite 3 never stops setup — it only decides whether the scheduled-task steps run.
 
 ## Step 2 — Read Core Config
 
@@ -128,7 +130,9 @@ If the journal folder itself is missing, warn: "The `{journal_folder}` folder do
 
 Do NOT auto-create the folder or the index note.
 
-## Step 6 — Deploy the Scheduled Task
+## Step 6 — Deploy the Scheduled Task (local only)
+
+**Gate:** only run this step if `SCHEDULING_AVAILABLE == true` (from the Step 1.3 probe). If it's `false`, skip the whole step — say "Skipping scheduled-task deployment (no local scheduler in this environment)." and move on to Step 7.
 
 There's only one scheduled task to deploy:
 
@@ -149,7 +153,9 @@ There's only one scheduled task to deploy:
 
 3. If a scheduled task with ID `bujo-ritual` already exists, use `mcp__scheduled-tasks__update_scheduled_task` to sync the cron and prompt.
 
-## Step 7 — Offer Legacy Cleanup
+## Step 7 — Offer Legacy Cleanup (local only)
+
+**Gate:** only run this step if `SCHEDULING_AVAILABLE == true`. Legacy tasks live in the local scheduler and `~/Documents/Claude/Scheduled/`; in a cloud session there's nothing local to clean, so skip to Step 7.5.
 
 The architecture previously used four separate scheduled tasks; the unified `bujo-ritual` task replaces all of them. Check for and offer to remove:
 
@@ -223,8 +229,8 @@ This step is non-blocking — the rest of setup is unaffected if Mike declines.
 
 Tell Mike:
 - Config saved to `{CONFIG_FILE}`
-- `bujo-ritual` scheduled task deployed/updated (cron: `{cron}`)
-- Any legacy tasks cleaned up
+- **If `SCHEDULING_AVAILABLE`:** `bujo-ritual` scheduled task deployed/updated (cron: `{cron}`); any legacy tasks cleaned up.
+- **If not `SCHEDULING_AVAILABLE`:** "No local scheduler here, so I skipped deploying the daily ritual task. Your config is saved — re-run `/workbench-bujo:bujo-setup` from the Claude desktop app (Cowork) or the CLI on your Mac to deploy it."
 - Remind: "Re-run `/workbench-bujo:bujo-setup` after a plugin update to sync the scheduled-task prompt with any changes."
 - Point to: "Customize signifiers or add extensions by creating `~/.claude/plugins/data/workbench-bujo-claude-workbench/rules.yaml`. See the plugin README for format."
 
@@ -233,4 +239,5 @@ Tell Mike:
 - **One task, not four.** The orchestrator handles tier routing at fire time — no need for separate weekly/monthly/yearly cron entries.
 - **Ad-hoc runs:** tier-specific slash commands (`/workbench-bujo:bujo-daily-ritual`, `-weekly-ritual`, `-monthly-ritual`, `-yearly-ritual`) still exist for manual invocation. They run the orchestrator with forced tier.
 - **First-time setup:** if no config exists, all fields start at hardcoded defaults (or core config values where applicable).
+- **Local-only scheduling.** The scheduled task is a local construct (`~/Documents/Claude/Scheduled/`, run by the desktop app's scheduler) and the ritual touches Apple Notes on the Mac. Setup detects this by probing the scheduled-tasks MCP in Step 1.3: reachable → local (deploy); unreachable → cloud (skip Steps 6–7, finish the rest). This keeps setup usable in the cloud — it writes config without planting a task that could never fire.
 - **Disabling the ritual:** set `schedules.bujo.enabled: false`. Re-run setup; it'll skip deployment and leave existing task as-is.
