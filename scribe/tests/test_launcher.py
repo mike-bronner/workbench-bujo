@@ -13,11 +13,13 @@ The launcher bootstraps the scribe MCP. Two behaviors are guarded here:
     other box's uv-managed interpreter, absent here). It passes the launcher's
     ``-x`` check yet can't run, so the hash guard alone would never rebuild it.
 
-Both live in bash, so — exactly as ``test_session_warmup_drift.py`` does for
-the warmup hook — these tests drive the real launcher as a subprocess against a
-hermetic scribe tree with stubbed ``uv``/``curl``, asserting observable
-behavior. stdout is the MCP stdio channel, so several tests assert it stays
-byte-for-byte clean through the bootstrap.
+Both live in bash, so — in the same spirit as ``test_session_warmup_drift.py``
+does for the warmup hook, though that sibling execs its hook in place while the
+launcher self-locates ``SCRIBE_DIR`` from ``BASH_SOURCE`` and so is copied into
+a hermetic tree here — these tests drive the real launcher as a subprocess with
+stubbed ``uv``/``curl``, asserting observable behavior. stdout is the MCP stdio
+channel, so several tests assert it stays byte-for-byte clean through the
+bootstrap.
 """
 
 from __future__ import annotations
@@ -213,6 +215,13 @@ def test_dead_interpreter_symlink_triggers_rebuild(tmp_path):
     assert Path(resolved).exists(), (
         "rebuilt bin/python must resolve to a real interpreter"
     )
+    # The rebuild must resync the hash marker to the current wheel. Without
+    # this, a regression that stops rewriting it slips through: the wipe above
+    # deletes the old marker, so the reinstall fires regardless — but then
+    # every *future* launch reinstalls too (empty marker != wheel hash).
+    assert (venv / ".installed-wheel-hash").read_text().strip() == _wheel_hash(
+        scribe
+    ), "rebuild must rewrite .installed-wheel-hash to the current wheel hash"
 
 
 def test_dead_interpreter_guard_noop_when_venv_absent(tmp_path):

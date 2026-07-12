@@ -44,11 +44,15 @@ mkdir -p "${RUN_DIR}"
 # stdout is the MCP stdio channel, so every byte of installer output goes to
 # stderr (`1>&2`) — matching the wheel-install convention below. The `|| true`
 # keeps `set -e` from aborting before the re-check, so an offline failure
-# surfaces as our actionable error rather than a bare pipe-failure exit.
+# surfaces as our actionable error rather than a bare pipe-failure exit. The
+# curl timeouts bound the "no hang" guarantee to more than a fast-failing DNS
+# error: a stalled connect (captive portal, black-holed 443) would otherwise
+# block on the OS SYN-retry timeout (~1-2 min) and read as a hang during the
+# MCP handshake.
 export PATH="${HOME}/.local/bin:${PATH}"
 if ! command -v uv >/dev/null 2>&1; then
   echo "scribe: uv not found; installing to ~/.local/bin" 1>&2
-  curl -LsSf https://astral.sh/uv/install.sh | sh 1>&2 || true
+  curl --connect-timeout 15 --max-time 120 -LsSf https://astral.sh/uv/install.sh | sh 1>&2 || true
   if ! command -v uv >/dev/null 2>&1; then
     echo "scribe: uv install failed — is the machine online? Install uv manually (https://astral.sh/uv), then retry." 1>&2
     exit 1
