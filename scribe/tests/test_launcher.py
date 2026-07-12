@@ -66,13 +66,16 @@ case "${1:-}" in
 esac
 """
 
-# Fake astral installer *download*. Records that it ran, then emits (on stdout,
-# which the launcher pipes into `sh 1>&2`) a script that installs the uv stub
-# into ~/.local/bin and prints a loud marker — proving the launcher redirects
-# every byte of bootstrap output away from its own stdout.
+# Fake astral installer *download*. Records that it ran (and its full argv, so a
+# test can assert the launcher passed the `--connect-timeout`/`--max-time`
+# anti-hang flags), then emits (on stdout, which the launcher pipes into
+# `sh 1>&2`) a script that installs the uv stub into ~/.local/bin and prints a
+# loud marker — proving the launcher redirects every byte of bootstrap output
+# away from its own stdout.
 CURL_INSTALL_OK = r"""#!/usr/bin/env bash
 set -euo pipefail
 touch "${CURL_SENTINEL}"
+printf '%s\n' "$@" > "${CURL_ARGV}"
 cat <<EOF
 echo "INSTALLER_STDOUT_MARKER installing uv"
 mkdir -p "\$HOME/.local/bin"
@@ -80,11 +83,12 @@ install -m 0755 "${UV_STUB_SRC}" "\$HOME/.local/bin/uv"
 EOF
 """
 
-# Simulate an offline download: record the attempt, emit nothing installable,
-# fail fast (no hang). Also used as a "must never run" tripwire when uv is
-# already present.
+# Simulate an offline download: record the attempt (and its argv, as above),
+# emit nothing installable, fail fast (no hang). Also used as a "must never run"
+# tripwire when uv is already present.
 CURL_OFFLINE = r"""#!/usr/bin/env bash
 touch "${CURL_SENTINEL}"
+printf '%s\n' "$@" > "${CURL_ARGV}"
 echo "curl: (6) Could not resolve host: astral.sh" 1>&2
 exit 6
 """
@@ -141,6 +145,7 @@ def _run(scribe: Path, tmp_path: Path, stubbin: Path, extra_env=None):
         # Real coreutils resolve here; the stub dir shadows uv/curl.
         "PATH": f"{stubbin}:/usr/bin:/bin:/usr/sbin:/sbin",
         "CURL_SENTINEL": str(tmp_path / "curl-ran"),
+        "CURL_ARGV": str(tmp_path / "curl-argv"),
     }
     if extra_env:
         env.update(extra_env)
@@ -191,6 +196,14 @@ def test_uv_missing_and_offline_errors_without_hang(tmp_path):
     assert "uv install failed" in res.stderr
     assert "online" in res.stderr
     assert res.stdout == "", f"stdout not clean: {res.stdout!r}"
+    # The "no hang" guarantee rests on curl's connect/total timeouts: a stub can't
+    # exercise the real SYN-retry timeout (it replaces curl), but asserting the
+    # launcher *passes* the flags locks the mechanism in — strip them from the
+    # launcher and this fails. A bare DNS failure returns fast either way, so
+    # without this the flags are invisible to the suite.
+    argv = (tmp_path / "curl-argv").read_text().splitlines()
+    assert "--connect-timeout" in argv, f"curl missing --connect-timeout: {argv}"
+    assert "--max-time" in argv, f"curl missing --max-time: {argv}"
 
 
 def test_dead_interpreter_symlink_triggers_rebuild(tmp_path):
