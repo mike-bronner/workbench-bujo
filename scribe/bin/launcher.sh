@@ -85,10 +85,16 @@ WHEEL_HASH="$(shasum -a 256 "${WHEEL}" | cut -d' ' -f1)"
 # vault synced via iCloud but the venv came along too). Its bin/python can be
 # a *present-but-dead* symlink pointing at the other box's uv-managed
 # interpreter, absent here. Such a venv passes the `-x` check below yet can't
-# run, and the hash guard alone would never rebuild it. When the interpreter
-# target does not resolve, wipe the venv so the rebuild proceeds. No-op when
-# the venv doesn't exist yet or the interpreter resolves correctly.
-if [ -d "${VENV_DIR}" ] && [ ! -e "$(readlink -f "${VENV_DIR}/bin/python" 2>/dev/null)" ]; then
+# run, and the hash guard alone would never rebuild it. `-e` follows the
+# symlink, so the test is false exactly when the interpreter target is
+# missing — healthy venv kept, dangling or absent bin/python wiped so the
+# rebuild proceeds. No-op when the venv doesn't exist yet.
+#
+# Deliberately readlink-free: `readlink -f` is a GNU / modern-macOS extension,
+# and on a macOS whose readlink lacks `-f` the old form
+# `[ ! -e "$(readlink -f ... 2>/dev/null)" ]` degraded to `[ ! -e "" ]` —
+# always true — wiping a *healthy* venv on every launch.
+if [ -d "${VENV_DIR}" ] && [ ! -e "${VENV_DIR}/bin/python" ]; then
   rm -rf "${VENV_DIR}"
 fi
 
@@ -105,7 +111,10 @@ if [ "${WHEEL_HASH}" != "${INSTALLED_HASH}" ] || [ ! -x "${VENV_DIR}/bin/bujo-sc
   if [ ! -d "${VENV_DIR}" ]; then
     uv venv "${VENV_DIR}" --python ">=3.11" >/dev/null 2>&1
   fi
-  uv pip install --python "${VENV_DIR}/bin/python" --quiet --force-reinstall "${WHEEL}"
+  # stdout is the MCP stdio channel: keep it clean structurally (>/dev/null,
+  # matching `uv venv` above) rather than trusting --quiet alone; stderr stays
+  # visible for diagnostics.
+  uv pip install --python "${VENV_DIR}/bin/python" --quiet --force-reinstall "${WHEEL}" >/dev/null
   echo "${WHEEL_HASH}" > "${HASH_MARKER}"
 fi
 

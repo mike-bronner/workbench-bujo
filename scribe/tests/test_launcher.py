@@ -17,9 +17,12 @@ Both live in bash, so — in the same spirit as ``test_session_warmup_drift.py``
 does for the warmup hook, though that sibling execs its hook in place while the
 launcher self-locates ``SCRIBE_DIR`` from ``BASH_SOURCE`` and so is copied into
 a hermetic tree here — these tests drive the real launcher as a subprocess with
-stubbed ``uv``/``curl``, asserting observable behavior. stdout is the MCP stdio
-channel, so several tests assert it stays byte-for-byte clean through the
-bootstrap.
+stubbed ``uv``/``curl``/``readlink``, asserting observable behavior. stdout is
+the MCP stdio channel, so the bootstrap *and* rebuild paths assert it stays
+byte-for-byte clean. The ``readlink`` stub rejects ``-f`` like a pre-12.3 macOS
+``/usr/bin/readlink``, pinning the dead-interpreter guard to a portable,
+readlink-free form (a regression to ``readlink -f`` would wipe a healthy venv
+under the stub and fail the healthy-venv test).
 """
 
 from __future__ import annotations
@@ -34,20 +37,26 @@ from pathlib import Path
 # scribe/tests/ -> scribe/ -> scribe/bin/launcher.sh
 LAUNCHER = Path(__file__).resolve().parents[1] / "bin" / "launcher.sh"
 
-# A `uv` stub. Chatters only on stderr (like a well-behaved `uv --quiet`) so the
-# launcher's stdout — the MCP stdio channel — stays clean. It materializes just
-# enough of a venv for the launcher to `exec` the entry point and exit 0.
+# A `uv` stub. Logs on stderr, and — in the venv/pip branches — deliberately
+# chatters on *stdout*, modeling a uv whose `--quiet` regressed. The launcher's
+# stdout is the MCP stdio channel, so its explicit redirects (`uv venv` and
+# `uv pip install` both `>/dev/null`) must swallow this; that is exactly what
+# the stdout-clean assertions pin — drop a redirect and they fail. It
+# materializes just enough of a venv for the launcher to `exec` the entry
+# point and exit 0.
 UV_STUB = r"""#!/usr/bin/env bash
 set -euo pipefail
 echo "uv-stub $*" 1>&2
 case "${1:-}" in
   venv)
     # uv venv <dir> --python <spec>
+    echo "uv-stub venv chatter (must never reach the launcher's stdout)"
     dir="${2:?uv venv needs a target dir}"
     mkdir -p "${dir}/bin"
     ln -sf "$(command -v python3)" "${dir}/bin/python"
     ;;
   pip)
+    echo "uv-stub pip chatter (must never reach the launcher's stdout)"
     # uv pip install --python <venv>/bin/python --quiet --force-reinstall <wheel>
     venvpy=""
     prev=""
@@ -93,6 +102,20 @@ echo "curl: (6) Could not resolve host: astral.sh" 1>&2
 exit 6
 """
 
+# An old-macOS `readlink` (pre-12.3): rejects `-f` the way /usr/bin/readlink
+# did before the GNU-style extension landed. On the stub PATH for every test,
+# so the dead-interpreter guard is pinned to a portable, readlink-free form:
+# with this stub, a regression back to `readlink -f` makes
+# `$(readlink -f ... 2>/dev/null)` yield "" and the guard wipes a *healthy*
+# venv — failing test_dead_interpreter_guard_noop_when_interpreter_resolves.
+READLINK_NO_F = r"""#!/usr/bin/env bash
+if [ "${1:-}" = "-f" ]; then
+  echo "usage: readlink [-n] [file ...]" 1>&2
+  exit 1
+fi
+exec /usr/bin/readlink "$@"
+"""
+
 
 def _write_exec(path: Path, content: str) -> Path:
     path.write_text(content)
@@ -128,12 +151,14 @@ def _wheel_hash(scribe: Path) -> str:
 
 
 def _stubbin(tmp_path: Path, *, uv: bool, curl: str) -> Path:
-    """Build a PATH dir with an optional uv stub and a chosen curl stub."""
+    """Build a PATH dir with an optional uv stub, a chosen curl stub, and the
+    old-macOS readlink stub (portability pin — see READLINK_NO_F)."""
     stubbin = tmp_path / "stubbin"
     stubbin.mkdir(exist_ok=True)
     if uv:
         _write_exec(stubbin / "uv", UV_STUB)
     _write_exec(stubbin / "curl", curl)
+    _write_exec(stubbin / "readlink", READLINK_NO_F)
     return stubbin
 
 
@@ -223,6 +248,7 @@ def test_dead_interpreter_symlink_triggers_rebuild(tmp_path):
 
     res = _run(scribe, tmp_path, stubbin)
     assert res.returncode == 0, res.stderr
+    assert res.stdout == "", f"stdout not clean: {res.stdout!r}"
     assert not marker.exists(), "stale venv must be wiped, not reused"
     resolved = os.path.realpath(venv / "bin" / "python")
     assert Path(resolved).exists(), (
@@ -244,12 +270,17 @@ def test_dead_interpreter_guard_noop_when_venv_absent(tmp_path):
     assert not (scribe / ".venv-stable").exists()
     res = _run(scribe, tmp_path, stubbin)
     assert res.returncode == 0, res.stderr
+    assert res.stdout == "", f"stdout not clean: {res.stdout!r}"
     assert (scribe / ".venv-stable" / "bin" / "python").exists()
 
 
 def test_dead_interpreter_guard_noop_when_interpreter_resolves(tmp_path):
     # Healthy venv (interpreter resolves, hash matches, entry point present) ->
     # no wipe and no rebuild, so a sentinel inside it survives untouched.
+    #
+    # This is also the portability pin: the stub PATH's readlink rejects `-f`
+    # (old macOS), so a regression back to the non-portable `readlink -f`
+    # guard would wipe this healthy venv and fail the KEEP assertion below.
     scribe = _make_scribe(tmp_path)
     stubbin = _stubbin(tmp_path, uv=True, curl=CURL_OFFLINE)
 
@@ -263,4 +294,5 @@ def test_dead_interpreter_guard_noop_when_interpreter_resolves(tmp_path):
 
     res = _run(scribe, tmp_path, stubbin)
     assert res.returncode == 0, res.stderr
+    assert res.stdout == "", f"stdout not clean: {res.stdout!r}"
     assert keep.exists(), "healthy venv must not be rebuilt"
