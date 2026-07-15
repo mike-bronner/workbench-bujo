@@ -36,9 +36,9 @@ Claude Code's MCP lifecycle can take ~10s from cold (spawn → handshake → `to
 
 Before dispatching the agent:
 
-1. Load the deferred schema in this (parent) conversation:
+1. Load the deferred schemas in this (parent) conversation — `AskUserQuestion` included, same as the sibling habit commands, so Step 2's first prompt never fires with an unloaded schema. Its absence from the results doubles as the up-front stripped-tool signal for Rule B:
    ```
-   ToolSearch(query="select:mcp__plugin_workbench-bujo_scribe__bujo_read", max_results=1)
+   ToolSearch(query="select:AskUserQuestion,mcp__plugin_workbench-bujo_scribe__bujo_read", max_results=2)
    ```
 2. Make one trivial call to nudge the handshake:
    ```
@@ -91,7 +91,7 @@ Keep the translation tight. One sentence per warning is usually enough. Strip ou
 
 When a warning needs a decision (options field is non-empty), use the `AskUserQuestion` tool to present options as clickable buttons. This keeps the session clearly "awaiting input" rather than appearing complete, and saves Mike from typing.
 
-**Check the tool is actually available first.** On scheduled/unattended runs Cowork strips `AskUserQuestion` from the toolset — invoking it throws `No such tool available: AskUserQuestion. AskUserQuestion exists but is not enabled in this context` instead of leaving a pending prompt. If the tool is absent (or the call throws that error), fall back to the plain-text pause: write the warning decisions as plain-text questions in chat — same content, options as prose — and **end the turn there**, running no rituals. Mike answers when he next opens the session. Never let the error kill the run, and never pick an option for him.
+**Check the tool is actually available first.** On scheduled/unattended runs Cowork strips `AskUserQuestion` from the toolset — invoking it throws `No such tool available: AskUserQuestion. AskUserQuestion exists but is not enabled in this context` instead of leaving a pending prompt. Step 1a's `ToolSearch` already told you which case you're in: `AskUserQuestion` missing from its results means the tool is stripped from this context. **Distinguish the two error shapes.** `InputValidationError` means the schema isn't loaded yet — the tool IS available; re-run the Step 1a `ToolSearch` and retry, and never mistake it for the stripped signal on a normal interactive run. The `No such tool available … not enabled in this context` error (or absence from the ToolSearch results) is the stripped-tool signal — only then use the **plain-text fallback pause** defined in the universal protocol (`skills/rituals/bujo-ritual.md`, "If `AskUserQuestion` is stripped"): write the warning decisions as plain-text questions in chat and **end the turn there**, running no rituals. Mike answers when he next opens the session. Never let the error kill the run, and never pick an option for him.
 
 Map the orchestrator's `options` values to human-readable labels:
 
