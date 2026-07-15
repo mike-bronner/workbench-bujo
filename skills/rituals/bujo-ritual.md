@@ -80,7 +80,7 @@ The sibling failure mode, and the one that strands unattended overnight runs: in
 > **Awaiting Mike for:**
 > The check-in (what happened yesterday / how it landed / what carries forward), habit check-in, disposition of the open task, surfacing of overdue Future Log items, scaffold of today's note, and priorities for the day.
 
-**That is not asking — it's a status report that leaves nothing pending.** Listing the steps you're *going* to take is never a substitute for taking the first one. When you reach **any** interactive step (Step 2 check-in, Step 2.5 habits, Step 3 disposition, Step 4 A2 Future Log triage, Step 5 planning), your first action is the `AskUserQuestion` tool call for that step's first prompt — or, when the tool is stripped from this context, that step's plain-text fallback pause (see "If `AskUserQuestion` is stripped" above): no "here's what's coming," no "awaiting Mike for…," no enumerated queue of upcoming questions. Ask the first question; the pending question itself is the signal that the session is waiting.
+**That is not asking — it's a status report that leaves nothing pending.** Listing the steps you're *going* to take is never a substitute for taking the first one. When you reach **any** interactive step (Step 2 check-in, Step 2.5 habits, Step 3 disposition, Step 4 A2 Future Log triage, the yearly Future Log rollover, Step 5 planning), your first action is the `AskUserQuestion` tool call for that step's first prompt — or, when the tool is stripped from this context, that step's plain-text fallback pause (see "If `AskUserQuestion` is stripped" above): no "here's what's coming," never an "awaiting Mike for…" summary, no enumerated queue of upcoming questions. Ask the first question; the pending question itself is the signal that the session is waiting.
 
 This bites hardest on an unattended run (a scheduled overnight pre-seed). There's no one to read a "waiting for" list, and a narrated summary pauses on prose with **no question pending** — so the morning session looks finished when nothing was actually asked. The correct shape is always: **invoke `AskUserQuestion` if it's available, otherwise deliver the same question via the plain-text fallback pause (see "If `AskUserQuestion` is stripped" above) — then pause on it.** Pause *on the question*, never *instead of* it. Note the difference from the forbidden narration: the fallback writes *the question itself* and stops; the narration lists upcoming steps and asks nothing.
 
@@ -655,11 +655,17 @@ If `monthly_prev` has no habit table, scaffold this month with no habit table ei
 For the yearly tier, after scaffolding, perform a Future Log rollover:
 
 1. Read the current `Future Log` via `bujo_read("future_log")`.
-2. Identify entries with dates in the year just ended that were never pulled into a daily log. Surface each to Mike:
+2. Identify entries with dates in the year just ended that were never pulled into a daily log. Triage each with Mike via `AskUserQuestion` — or, if the tool is stripped (unattended run), the plain-text fallback pause (see "If `AskUserQuestion` is stripped"). One question per entry, batched into a single call when there are several; put the entry's full text and original date in the `preview` field:
 
-   > "'[entry]' was scheduled for [date] but never ran. Migrate to the new year, drop, or reschedule?"
+   ```
+   Question: "'[entry]' was scheduled for [date] but never ran — what happens to it?"
+   Options:
+     - "Migrate to the new year"
+     - "Drop"
+     - "Reschedule"
+   ```
 
-3. Apply decisions via `bujo_apply_decisions` on the Future Log.
+3. Apply decisions via `bujo_apply_decisions` on the Future Log — only what Mike picked; never dispose of an entry he didn't decide on.
 4. Confirm with Mike that the Future Log is ready for the new year.
 
 The Future Log doesn't get renamed or archived — it's a living note. The rollover is about cleaning stale entries, not replacing the note.
@@ -702,11 +708,11 @@ If Mike picks a content option and it seems shallow, probe once *in plain text* 
 
 > "Fine in what way? A rested-fine, a numbing-fine, a bracing-fine?"
 
-Accept what comes. Then ask the tier-appropriate planning question — open reflection, so use the escape-hatch `AskUserQuestion` pattern (see Tier matrix Step-5 column) with "Pass" / "Come back to this" + Other.
+Accept what comes. Then ask the tier-appropriate planning question — open reflection, so use the escape-hatch `AskUserQuestion` pattern (see Tier matrix Step-5 column) with "Pass" / "Come back to this" + Other — or, if the tool is stripped (unattended run), the plain-text fallback pause (see "If `AskUserQuestion` is stripped").
 
 **Light tier (weekly) — skip the energy check, go straight to planning:**
 
-Open reflection via the escape-hatch pattern:
+Open reflection via the escape-hatch `AskUserQuestion` pattern — or, if the tool is stripped (unattended run), the plain-text fallback pause (see "If `AskUserQuestion` is stripped"):
 
 ```
 Question: "What's the shape of this week — what matters most?"
