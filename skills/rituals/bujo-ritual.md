@@ -655,7 +655,7 @@ If `monthly_prev` has no habit table, scaffold this month with no habit table ei
 For the yearly tier, after scaffolding, perform a Future Log rollover:
 
 1. Read the current `Future Log` via `bujo_read("future_log")`.
-2. Identify entries with dates in the year just ended that were never pulled into a daily log. Triage each with Mike via `AskUserQuestion` — or, if the tool is stripped (unattended run), the plain-text fallback pause (see "If `AskUserQuestion` is stripped"). One question per entry, batched into a single call when there are several; put the entry's full text and original date in the `preview` field:
+2. Identify entries with dates in the year just ended that were never pulled into a daily log. Triage each with Mike via `AskUserQuestion` — or, if the tool is stripped (unattended run), the plain-text fallback pause (see "If `AskUserQuestion` is stripped"). One question per entry, batched into a single call when there are several (up to 4 per call); put the entry's full text and original date in the `preview` field:
 
    ```
    Question: "'[entry]' was scheduled for [date] but never ran — what happens to it?"
