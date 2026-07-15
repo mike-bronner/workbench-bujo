@@ -55,6 +55,24 @@ AskUserQuestion({
 
 That's prose rendering. There are no buttons. The user has to type anyway. The UI doesn't know the session is waiting. **Always invoke the tool.**
 
+### 🔌 If `AskUserQuestion` is stripped — the plain-text fallback pause
+
+`AskUserQuestion` is **not always callable.** Cowork's scheduled-task runner strips it from the toolset entirely for non-interactive/scheduled executions — invoking it there throws `No such tool available: AskUserQuestion. AskUserQuestion exists but is not enabled in this context`, rather than leaving a pending prompt. A scheduled `/bujo` run that assumes the tool exists dead-ends on that error at its first interactive step.
+
+**Check availability before assuming the call will succeed.** Two detection paths:
+
+1. **Up front:** the batch ToolSearch above tells you. If `AskUserQuestion` is absent from its results (while the scribe verbs load fine), the tool is stripped from this context — plan on the fallback for every interactive step of this run.
+2. **On first failure:** if an invocation throws `No such tool available … not enabled in this context`, that's the stripped-tool signal — switch to the fallback. (Don't confuse it with `InputValidationError`, which just means the schema isn't loaded yet — re-run the ToolSearch for that one.)
+
+**The fallback — same end-state as a normal pause-on-question.** When `AskUserQuestion` is confirmed unavailable, at any interactive step:
+
+1. Write the step's pending question as **plain-text chat output** — the same question text you would have put in the tool call, with the options listed as prose.
+2. **End your turn there.** No further ritual steps, no unhandled error, no auto-completing, no fabricated answer. The session ends paused on the visible question, awaiting Mike's reply when he next opens it — exactly the paused-on-a-question end-state a normal run reaches via the tool call.
+
+When Mike answers and the session resumes interactively, continue from that step (using the tool again if it's available in the resumed context).
+
+**This does not weaken the "never format text instead of invoking the tool" rule above.** In any context where `AskUserQuestion` exists, prose questions remain the #1 failure mode — the fallback applies *only* when the tool is confirmed stripped.
+
 ### 🛑 Lead with the question — never narrate what you're *about* to ask
 
 The sibling failure mode, and the one that strands unattended overnight runs: instead of asking the first question, the agent writes a prose summary of everything it's *about* to do, then stops — e.g.:
@@ -62,9 +80,9 @@ The sibling failure mode, and the one that strands unattended overnight runs: in
 > **Awaiting Mike for:**
 > The check-in (what happened yesterday / how it landed / what carries forward), habit check-in, disposition of the open task, surfacing of overdue Future Log items, scaffold of today's note, and priorities for the day.
 
-**That is not asking — it's a status report that leaves nothing pending.** Listing the steps you're *going* to take is never a substitute for taking the first one. When you reach **any** interactive step (Step 2 check-in, Step 2.5 habits, Step 3 disposition, Step 5 planning), your first action is the `AskUserQuestion` tool call for that step's first prompt: no "here's what's coming," no "awaiting Mike for…," no enumerated queue of upcoming questions. Ask the first question; the tool call itself is the signal that the session is waiting.
+**That is not asking — it's a status report that leaves nothing pending.** Listing the steps you're *going* to take is never a substitute for taking the first one. When you reach **any** interactive step (Step 2 check-in, Step 2.5 habits, Step 3 disposition, Step 4 A2 Future Log triage, the yearly Future Log rollover, Step 5 planning), your first action is the `AskUserQuestion` tool call for that step's first prompt — or, when the tool is stripped from this context, that step's plain-text fallback pause (see "If `AskUserQuestion` is stripped" above): no "here's what's coming," never an "awaiting Mike for…" summary, no enumerated queue of upcoming questions. Ask the first question; the pending question itself is the signal that the session is waiting.
 
-This bites hardest on an unattended run (a scheduled overnight pre-seed). There's no one to read a "waiting for" list, and a narrated summary pauses on prose with **no question pending** — so the morning session looks finished when nothing was actually asked. The correct shape is always: **invoke `AskUserQuestion`, then pause on the unanswered tool call.** Pause *on the question*, never *instead of* it.
+This bites hardest on an unattended run (a scheduled overnight pre-seed). There's no one to read a "waiting for" list, and a narrated summary pauses on prose with **no question pending** — so the morning session looks finished when nothing was actually asked. The correct shape is always: **invoke `AskUserQuestion` if it's available, otherwise deliver the same question via the plain-text fallback pause (see "If `AskUserQuestion` is stripped" above) — then pause on it.** Pause *on the question*, never *instead of* it. Note the difference from the forbidden narration: the fallback writes *the question itself* and stops; the narration lists upcoming steps and asks nothing.
 
 ---
 
@@ -236,6 +254,8 @@ If the workbench-core config, the vault, or yesterday's `sessions/` directory is
 
 **For daily, monthly, yearly:** this is a single combined step. It replaces both Ryder's PM "how did it go" and his AM "what's missing" — running them together in the morning.
 
+**Unattended runs:** if `AskUserQuestion` is stripped from this context, deliver the opening check-in question via the plain-text fallback pause (see "If `AskUserQuestion` is stripped") and end the turn there — never error out, never skip ahead to later steps.
+
 ### 🚨 The check-in is a multi-turn conversation, NOT a one-shot question
 
 **This is the core failure mode the daily ritual keeps hitting.** The agent asks one question, accepts a one-word answer, and shortcuts to scaffolding. The whole point of the ritual is to surface what yesterday actually was — that takes more than a single Q&A.
@@ -310,7 +330,7 @@ For the daily tier, after Step 2's check-in and BEFORE Step 3's item review:
    - Determine if today is a "due day" for that cadence.
    - Find today's row + this habit's cell in the table.
    - If the cell is empty AND today is a due day → habit is "open."
-4. Surface all open habits via a SINGLE `AskUserQuestion` call (batch up to 4 questions). Format same as the SessionStart hook's habit prompts.
+4. Surface all open habits via a SINGLE `AskUserQuestion` call (batch up to 4 questions). Format same as the SessionStart hook's habit prompts. If the tool is stripped (unattended run), use the plain-text fallback pause instead — write the batched habit questions as prose and end the turn (see "If `AskUserQuestion` is stripped").
 5. For each Yes → regenerate the table HTML with that cell flipped to `✅` (or `✅ <n>` for quantitative — agent asks "how much?" before dispatching). One `update_table` per habit, OR collect all updates and do one final `update_table` with the fully-updated table HTML (preferred — single write).
 6. For each No → skip silently. Self-throttle on 3+ consecutive nos.
 
@@ -389,7 +409,7 @@ Some items get a mandatory probe regardless of how Mike opened. The orchestrator
 
 For routine items (no salience signal, no priority prefix, completed cleanly without friction), brisk acknowledgment is fine. The point isn't to grind through every standup mention — it's to hold real depth on the items that asked for it.
 
-5. **Capture the disposition** that emerges. If the reflection already implied a disposition, confirm it conversationally (via a yes/no `AskUserQuestion`). If it's still open, use `AskUserQuestion` with the decisions below. **Set a `preview` field** on each option showing the item's full context — original text, days open, migration count — so Mike sees the full picture on hover without it cluttering the chat.
+5. **Capture the disposition** that emerges. If the reflection already implied a disposition, confirm it conversationally (via a yes/no `AskUserQuestion`). If it's still open, use `AskUserQuestion` with the decisions below. If the tool is stripped (unattended run), pause on the current item's question via the plain-text fallback (see "If `AskUserQuestion` is stripped") — never dispatch a disposition Mike didn't pick. **Set a `preview` field** on each option showing the item's full context — original text, days open, migration count — so Mike sees the full picture on hover without it cluttering the chat.
 
    - **Carry forward** — migrate to current-tier target
    - **Combine into another task** — fold this item under a parent task as a nested sub-item (see "Combine" below)
@@ -507,7 +527,7 @@ Part A is two operations, not one:
    prompt, no "nothing to surface" narration.
 ```
 
-**Present each surfacing item via `AskUserQuestion` (the structured tool call, per "How to ask" above — never prose).** One item per `question`; batch up to 4 items into a single call. Show the item's **full text and original scheduled date in the `preview` field** so the context lives on hover, not in chat:
+**Present each surfacing item via `AskUserQuestion` (the structured tool call, per "How to ask" above — never prose while the tool is available; if it's stripped on an unattended run, the plain-text fallback pause applies: write the triage questions as prose and end the turn — see "If `AskUserQuestion` is stripped").** One item per `question`; batch up to 4 items into a single call. Show the item's **full text and original scheduled date in the `preview` field** so the context lives on hover, not in chat:
 
 ```jsonc
 AskUserQuestion({
@@ -635,11 +655,17 @@ If `monthly_prev` has no habit table, scaffold this month with no habit table ei
 For the yearly tier, after scaffolding, perform a Future Log rollover:
 
 1. Read the current `Future Log` via `bujo_read("future_log")`.
-2. Identify entries with dates in the year just ended that were never pulled into a daily log. Surface each to Mike:
+2. Identify entries with dates in the year just ended that were never pulled into a daily log. Triage each with Mike via `AskUserQuestion` — or, if the tool is stripped (unattended run), the plain-text fallback pause (see "If `AskUserQuestion` is stripped"). One question per entry, batched into a single call when there are several (up to 4 per call); put the entry's full text and original date in the `preview` field:
 
-   > "'[entry]' was scheduled for [date] but never ran. Migrate to the new year, drop, or reschedule?"
+   ```
+   Question: "'[entry]' was scheduled for [date] but never ran — what happens to it?"
+   Options:
+     - "Migrate to the new year"
+     - "Drop"
+     - "Reschedule"
+   ```
 
-3. Apply decisions via `bujo_apply_decisions` on the Future Log.
+3. Apply decisions via `bujo_apply_decisions` on the Future Log — only what Mike picked; never dispose of an entry he didn't decide on.
 4. Confirm with Mike that the Future Log is ready for the new year.
 
 The Future Log doesn't get renamed or archived — it's a living note. The rollover is about cleaning stale entries, not replacing the note.
@@ -654,7 +680,7 @@ The Future Log doesn't get renamed or archived — it's a living note. The rollo
 
 **Full tiers (daily / monthly / yearly) — with energy-aware check:**
 
-Ask the tier-appropriate energy/feeling check first via `AskUserQuestion`. Use content-rich prefabs — these ARE legitimate answer-space anchors for a quick pick, and "Other" handles anything richer:
+Ask the tier-appropriate energy/feeling check first via `AskUserQuestion` — or, if the tool is stripped (unattended run), via the plain-text fallback pause (see "If `AskUserQuestion` is stripped"): write the question and end the turn. Use content-rich prefabs — these ARE legitimate answer-space anchors for a quick pick, and "Other" handles anything richer:
 
 Daily example:
 ```
@@ -682,11 +708,11 @@ If Mike picks a content option and it seems shallow, probe once *in plain text* 
 
 > "Fine in what way? A rested-fine, a numbing-fine, a bracing-fine?"
 
-Accept what comes. Then ask the tier-appropriate planning question — open reflection, so use the escape-hatch `AskUserQuestion` pattern (see Tier matrix Step-5 column) with "Pass" / "Come back to this" + Other.
+Accept what comes. Then ask the tier-appropriate planning question — open reflection, so use the escape-hatch `AskUserQuestion` pattern (see Tier matrix Step-5 column) with "Pass" / "Come back to this" + Other — or, if the tool is stripped (unattended run), the plain-text fallback pause (see "If `AskUserQuestion` is stripped").
 
 **Light tier (weekly) — skip the energy check, go straight to planning:**
 
-Open reflection via the escape-hatch pattern:
+Open reflection via the escape-hatch `AskUserQuestion` pattern — or, if the tool is stripped (unattended run), the plain-text fallback pause (see "If `AskUserQuestion` is stripped"):
 
 ```
 Question: "What's the shape of this week — what matters most?"
@@ -750,4 +776,4 @@ Don't narrate what you did. The note itself is the artifact.
 12. **Batch mutations per note.** One `bujo_apply_decisions` call per note per step where possible.
 13. **Tier-appropriate weight.** A daily isn't a yearly. Don't speed-run yearly like a daily, don't depth-dive daily like a yearly. Weekly is deliberately lightweight — don't turn it into a monthly.
 14. **Yearly only: Future Log rollover.** Clean stale entries during the yearly ritual — don't let the Future Log accumulate indefinitely.
-15. **Lead with the question; never narrate pending steps.** At every interactive step, your first action is the `AskUserQuestion` tool call for that step's first prompt — never a prose summary of what you're about to ask. Output of the form "Awaiting Mike for: [list of steps]" is forbidden: it asks nothing and leaves the session looking complete. On an unattended run, invoke `AskUserQuestion` and pause on the unanswered call — pause *on the question*, never *instead of* it. See "Lead with the question" under INTERACTIVITY IS THE POINT.
+15. **Lead with the question; never narrate pending steps.** At every interactive step, your first action is asking that step's first prompt — invoke `AskUserQuestion` if it's available, otherwise pause on the same question as plain-text chat output (the fallback pause — see "If `AskUserQuestion` is stripped" under INTERACTIVITY IS THE POINT). Never a prose summary of what you're about to ask: output of the form "Awaiting Mike for: [list of steps]" is forbidden — it asks nothing and leaves the session looking complete. On an unattended run, Cowork strips `AskUserQuestion` from the toolset (invoking it throws `No such tool available`), so the fallback IS the correct behavior there: write the pending question, end the turn, and pause *on the question*, never *instead of* it — and never on a thrown tool-availability error. See "Lead with the question" under INTERACTIVITY IS THE POINT.

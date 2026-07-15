@@ -36,9 +36,9 @@ Claude Code's MCP lifecycle can take ~10s from cold (spawn → handshake → `to
 
 Before dispatching the agent:
 
-1. Load the deferred schema in this (parent) conversation:
+1. Load the deferred schemas in this (parent) conversation — `AskUserQuestion` included, same as the sibling habit commands, so Step 2's first prompt never fires with an unloaded schema. Its absence from the results doubles as the up-front stripped-tool signal for Rule B:
    ```
-   ToolSearch(query="select:mcp__plugin_workbench-bujo_scribe__bujo_read", max_results=1)
+   ToolSearch(query="select:AskUserQuestion,mcp__plugin_workbench-bujo_scribe__bujo_read", max_results=2)
    ```
 2. Make one trivial call to nudge the handshake:
    ```
@@ -90,6 +90,8 @@ Keep the translation tight. One sentence per warning is usually enough. Strip ou
 ### Rule B — Use `AskUserQuestion` for decisions, not text prompts
 
 When a warning needs a decision (options field is non-empty), use the `AskUserQuestion` tool to present options as clickable buttons. This keeps the session clearly "awaiting input" rather than appearing complete, and saves Mike from typing.
+
+**Check the tool is actually available first.** On scheduled/unattended runs Cowork strips `AskUserQuestion` from the toolset — invoking it throws `No such tool available: AskUserQuestion. AskUserQuestion exists but is not enabled in this context` instead of leaving a pending prompt. Step 1a's `ToolSearch` already told you which case you're in: `AskUserQuestion` missing from its results means the tool is stripped from this context. **Distinguish the two error shapes.** `InputValidationError` means the schema isn't loaded yet — the tool IS available; re-run the Step 1a `ToolSearch` and retry, and never mistake it for the stripped signal on a normal interactive run. The `No such tool available … not enabled in this context` error (or absence from the ToolSearch results) is the stripped-tool signal — only then use the **plain-text fallback pause** defined in the universal protocol (`skills/rituals/bujo-ritual.md`, "If `AskUserQuestion` is stripped"): write the warning decisions as plain-text questions in chat and **end the turn there**, running no rituals. Mike answers when he next opens the session. Never let the error kill the run, and never pick an option for him.
 
 Map the orchestrator's `options` values to human-readable labels:
 
@@ -143,7 +145,9 @@ When you hand off to the first tier, its first interactive step's `AskUserQuesti
 
 is **forbidden** — it asks nothing and leaves the session looking complete. The protocol's "Lead with the question" rule is canonical; the entrypoint must not undercut it by narrating the queue before the first tier even starts.
 
-**Unattended / overnight runs block at the first question — by design.** The cron fires `/bujo` with no one watching (e.g., a nightly pre-seed before the morning ritual). That run is *expected* to reach the first interactive step, invoke `AskUserQuestion`, and **pause there** — not to auto-complete, not to summarize the pending work, not to fabricate answers. Mike returns in the morning to a question already on screen, answers it, and the ritual continues. A paused-on-a-question session is the correct end-state for an unattended run; a "here's what I'm waiting for" summary is a bug.
+**Unattended / overnight runs block at the first question — by design.** The cron fires `/bujo` with no one watching (e.g., a nightly pre-seed before the morning ritual). That run is *expected* to reach the first interactive step and **pause on its first question** — not to auto-complete, not to summarize the pending work, not to fabricate answers, and not to die on a tool error. Mike returns in the morning to a question already on screen, answers it, and the ritual continues. A paused-on-a-question session is the correct end-state for an unattended run; a "here's what I'm waiting for" summary is a bug, and so is a thrown error.
+
+**`AskUserQuestion` is NOT callable on these runs.** Cowork's scheduled-task runner strips the tool from the toolset entirely for non-interactive/scheduled executions — invoking it throws `No such tool available: AskUserQuestion. AskUserQuestion exists but is not enabled in this context`, rather than leaving a pending prompt. So before (or on the first failed) invocation at any interactive step, check whether the tool actually exists in this context — it's absent from the loaded tool list, or the call throws that "not enabled in this context" error. When it's unavailable, use the **plain-text fallback pause** (defined in the universal protocol, `skills/rituals/bujo-ritual.md`, "If `AskUserQuestion` is stripped"): write the pending question as plain-text chat output — same question, options as prose — and end the turn with no further steps executed. That reaches the identical paused-awaiting-Mike end-state the tool call would have produced.
 
 ## Step 4 — close
 
@@ -158,4 +162,4 @@ Once all rituals in the plan have run, close with a single line:
 3. **Don't skip Step 2 when warnings exist.** Even if the warnings look minor, Mike gets to decide.
 4. **Use the `/bujo` entry point for scheduled tasks too.** The cron fires this same command. Warnings surface in the paused session; Mike sees them when he returns.
 5. **Don't invoke the orchestrator more than once per session.** Its job is to plan once, up front.
-6. **Lead with the question; never narrate pending steps.** Hand off to the first ritual by invoking its first `AskUserQuestion`, not by emitting an "Awaiting Mike for: [list]" summary of what's queued. An unattended/overnight run is *expected* to block on that first question and pause — that's the correct end-state, not auto-completion or a pending-work summary.
+6. **Lead with the question; never narrate pending steps.** Hand off to the first ritual by asking its first question — invoke `AskUserQuestion` if it's available, otherwise pause on the same question as plain-text chat output (the fallback pause — see Step 3's unattended-runs note and the universal protocol's "If `AskUserQuestion` is stripped" section). Never emit an "Awaiting Mike for: [list]" summary of what's queued. An unattended/overnight run is *expected* to block on that first question and pause — that's the correct end-state, not auto-completion, not a pending-work summary, and not a `No such tool available` error.

@@ -207,3 +207,162 @@ def test_a2_mixed_dispositions_batch_into_one_call():
     a2 = _a2_section()
     for op in ('op: "surface"', 'op: "drop"', 'op: "update"', 'op: "complete"'):
         assert op in a2, f"A2 batched example is missing {op}"
+
+
+# ---------------------------------------------------------------------------
+# Issue #28 — scheduled/unattended runs strip AskUserQuestion entirely.
+#
+# Cowork's scheduled-task runner removes the tool from the toolset for
+# non-interactive executions, so invoking it throws "No such tool available:
+# AskUserQuestion. AskUserQuestion exists but is not enabled in this context"
+# instead of leaving a pending prompt. The fix teaches both prompt files an
+# availability check plus a plain-text fallback pause that reaches the same
+# paused-on-a-question end-state. Same convention as the tests above: an
+# LLM-driven ritual can't run in CI, so these assert the prompt-file
+# invariants that drive the behavior — the automatable proxy for the issue's
+# manual-verification AC.
+# ---------------------------------------------------------------------------
+
+STRIPPED_ERROR = "no such tool available"
+STRIPPED_ERROR_DETAIL = "not enabled in this context"
+
+
+def _protocol_stripped_section() -> str:
+    """The protocol's 'If AskUserQuestion is stripped' section (lowercased).
+
+    Sliced from its heading to the next heading so an assertion can't
+    accidentally pass on a phrase that lives elsewhere in the protocol.
+    """
+    text = PROTOCOL.read_text()
+    start = text.index("If `AskUserQuestion` is stripped — the plain-text fallback pause")
+    end = text.index("Lead with the question — never narrate", start)
+    return text[start:end].lower()
+
+
+def _entrypoint_rule_b_section() -> str:
+    """Step 2 Rule B of the entrypoint (lowercased), sliced to Rule C."""
+    text = ENTRYPOINT.read_text()
+    start = text.index("### Rule B")
+    end = text.index("### Rule C", start)
+    return text[start:end].lower()
+
+
+def test_protocol_documents_stripped_tool_error():
+    # The exact failure a scheduled run hits must be named, so the agent can
+    # recognize it instead of dying on it.
+    section = _protocol_stripped_section()
+    assert STRIPPED_ERROR in section
+    assert STRIPPED_ERROR_DETAIL in section
+
+
+def test_protocol_checks_availability_before_calling():
+    # Detection is defined up front (ToolSearch results) — not discovered by
+    # crashing on the first interactive step.
+    section = _protocol_stripped_section()
+    assert "check availability" in section
+    assert "toolsearch" in section
+
+
+def test_protocol_fallback_pauses_without_fabricating():
+    # The fallback reaches the same end-state as a normal pause-on-question:
+    # the pending question as plain text, then end of turn — with all five
+    # guarantees AC #3 requires: no further ritual steps, no unhandled error,
+    # no auto-completing, no fabricated answer.
+    section = _protocol_stripped_section()
+    assert "plain-text chat output" in section
+    assert "end your turn" in section
+    assert "no further ritual steps" in section
+    assert "no unhandled error" in section
+    assert "no auto-completing" in section
+    assert "no fabricated answer" in section
+
+
+# Every unattended interactive step the doc enumerates (AC #4's four plus the
+# beyond-AC Step 4 A2 triage): each region is sliced from its own heading to
+# the next section's, so deleting any single per-step fallback callout fails
+# here — a whole-doc match would stay green on the surviving siblings.
+UNATTENDED_STEP_REGIONS = {
+    "Step 2 check-in": ("## Step 2 —", "## Step 2.5"),
+    "Step 2.5 habits": ("## Step 2.5", "## Step 3"),
+    "Step 3 disposition": ("## Step 3", "## Step 4"),
+    "Step 4 A2 triage": ("A2. Triage Future Log", "### Part B"),
+    "Step 5 planning": ("## Step 5", "## Step 6"),
+}
+
+
+def test_every_unattended_interactive_step_references_fallback():
+    # AC #4: every interactive step that can run unattended references the
+    # same fallback — not just the entry point or the canonical section.
+    text = PROTOCOL.read_text()
+    for name, (start, end) in UNATTENDED_STEP_REGIONS.items():
+        i = text.index(start)
+        section = text[i : text.index(end, i)].lower()
+        assert (
+            "if `askuserquestion` is stripped" in section
+            and "plain-text fallback" in section
+        ), f"{name} no longer references the stripped-tool fallback pause"
+
+
+def test_protocol_distinguishes_schema_miss_from_stripped_tool():
+    # InputValidationError = deferred schema not loaded (the tool IS
+    # available; re-run the ToolSearch). It must never be read as the
+    # stripped-tool signal, or a normal interactive run wrongly degrades.
+    section = _protocol_stripped_section()
+    assert "inputvalidationerror" in section
+    assert "schema isn't loaded" in section
+
+
+def test_protocol_hard_rule_matches_stripped_reality():
+    # Hard rule 15: "invoke if available, otherwise pause on the plain-text
+    # question" — the documented contract matches what happens when the tool
+    # is stripped. Scoped to the Hard-rules section: the same phrase also
+    # appears in the "Lead with the question" narrative, so a whole-doc match
+    # would stay green even if rule 15 itself regressed.
+    text = PROTOCOL.read_text()
+    hard_rules = text[text.index("## Hard rules (apply to all tiers") :].lower()
+    assert "invoke `askuserquestion` if it's available, otherwise" in hard_rules
+
+
+def test_entrypoint_documents_stripped_tool_error():
+    text = ENTRYPOINT.read_text().lower()
+    assert STRIPPED_ERROR in text
+    assert STRIPPED_ERROR_DETAIL in text
+
+
+def test_entrypoint_loads_askuserquestion_up_front():
+    # Step 1a batch-loads AskUserQuestion like the sibling habit commands, so
+    # Rule B's first invocation never fires against an unloaded schema (which
+    # would throw InputValidationError, not the stripped-tool error).
+    text = ENTRYPOINT.read_text().lower()
+    assert "select:askuserquestion" in text
+
+
+def test_entrypoint_rule_b_distinguishes_error_shapes():
+    rule_b = _entrypoint_rule_b_section()
+    assert "inputvalidationerror" in rule_b
+    assert STRIPPED_ERROR_DETAIL in rule_b
+
+
+def test_entrypoint_rule_b_references_canonical_fallback():
+    # Rule B points at the protocol's canonical fallback section rather than
+    # inlining its own copy, so the two can't drift.
+    rule_b = _entrypoint_rule_b_section()
+    assert "if `askuserquestion` is stripped" in rule_b
+
+
+def test_entrypoint_unattended_rule_matches_stripped_reality():
+    # Hard rule 6 carries the same "if available, otherwise plain-text"
+    # contract as the protocol's hard rule 15.
+    text = ENTRYPOINT.read_text().lower()
+    assert "invoke `askuserquestion` if it's available, otherwise" in text
+
+
+def test_yearly_rollover_triages_via_askuserquestion():
+    # Review follow-up: the yearly Future Log rollover asks per entry via
+    # AskUserQuestion (with the stripped-tool fallback), not blockquote prose.
+    text = PROTOCOL.read_text()
+    start = text.index("### Yearly-only — Future Log rollover")
+    end = text.index("## Step 5", start)
+    rollover = text[start:end].lower()
+    assert "askuserquestion" in rollover
+    assert "if `askuserquestion` is stripped" in rollover
