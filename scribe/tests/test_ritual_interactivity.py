@@ -265,12 +265,40 @@ def test_protocol_checks_availability_before_calling():
 
 def test_protocol_fallback_pauses_without_fabricating():
     # The fallback reaches the same end-state as a normal pause-on-question:
-    # the pending question as plain text, then end of turn — never an
-    # unhandled error, never auto-completion, never a fabricated answer.
+    # the pending question as plain text, then end of turn — with all five
+    # guarantees AC #3 requires: no further ritual steps, no unhandled error,
+    # no auto-completing, no fabricated answer.
     section = _protocol_stripped_section()
     assert "plain-text chat output" in section
     assert "end your turn" in section
+    assert "no further ritual steps" in section
+    assert "no unhandled error" in section
+    assert "no auto-completing" in section
     assert "no fabricated answer" in section
+
+
+# AC #4's enumerated interactive steps: each region is sliced from its own
+# heading to the next step's, so deleting any single per-step fallback callout
+# fails here — a whole-doc match would stay green on the surviving siblings.
+UNATTENDED_STEP_REGIONS = {
+    "Step 2 check-in": ("## Step 2 —", "## Step 2.5"),
+    "Step 2.5 habits": ("## Step 2.5", "## Step 3"),
+    "Step 3 disposition": ("## Step 3", "## Step 4"),
+    "Step 5 planning": ("## Step 5", "## Step 6"),
+}
+
+
+def test_every_unattended_interactive_step_references_fallback():
+    # AC #4: every interactive step that can run unattended references the
+    # same fallback — not just the entry point or the canonical section.
+    text = PROTOCOL.read_text()
+    for name, (start, end) in UNATTENDED_STEP_REGIONS.items():
+        i = text.index(start)
+        section = text[i : text.index(end, i)].lower()
+        assert (
+            "if `askuserquestion` is stripped" in section
+            and "plain-text fallback" in section
+        ), f"{name} no longer references the stripped-tool fallback pause"
 
 
 def test_protocol_distinguishes_schema_miss_from_stripped_tool():
@@ -285,9 +313,12 @@ def test_protocol_distinguishes_schema_miss_from_stripped_tool():
 def test_protocol_hard_rule_matches_stripped_reality():
     # Hard rule 15: "invoke if available, otherwise pause on the plain-text
     # question" — the documented contract matches what happens when the tool
-    # is stripped.
-    text = PROTOCOL.read_text().lower()
-    assert "invoke `askuserquestion` if it's available, otherwise" in text
+    # is stripped. Scoped to the Hard-rules section: the same phrase also
+    # appears in the "Lead with the question" narrative, so a whole-doc match
+    # would stay green even if rule 15 itself regressed.
+    text = PROTOCOL.read_text()
+    hard_rules = text[text.index("## Hard rules") :].lower()
+    assert "invoke `askuserquestion` if it's available, otherwise" in hard_rules
 
 
 def test_entrypoint_documents_stripped_tool_error():
