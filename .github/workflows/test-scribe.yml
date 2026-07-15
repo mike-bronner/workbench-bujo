@@ -1,0 +1,76 @@
+name: Test scribe
+
+# PR gate for the scribe MCP: runs the pytest suite and lints the shell
+# scripts on every pull request that touches `scribe/**`. Without this,
+# tests run only at release time (release.yml) and shellcheck/bash -n
+# never run in CI at all — a test- or lint-breaking change could merge
+# to main and stay invisible until a release is cut (#30).
+#
+# The test job runs on ubuntu AND macos: the scribe targets macOS
+# (Apple Notes, EventKit, the launcher's BSD-vs-GNU tool differences),
+# so a Linux-only runner can't see macOS-specific portability breaks —
+# exactly the class of bug #27 fixed in the launcher.
+
+on:
+  pull_request:
+    paths:
+      - "scribe/**"
+      - ".github/workflows/test-scribe.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: test-scribe-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Run tests
+        run: |
+          set -euo pipefail
+          cd scribe
+          uv run --extra dev pytest
+
+  lint-shell:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Every tracked *.sh under scribe/ gets `bash -n` (syntax) and
+      # shellcheck. Severity is gated at warning+ so info-level style
+      # notes (e.g. SC2012 on the launcher's controlled wheel glob)
+      # surface locally but don't block PRs.
+      - name: bash -n + shellcheck
+        run: |
+          set -euo pipefail
+          scripts=$(git ls-files scribe | grep '\.sh$' || true)
+          if [ -z "${scripts}" ]; then
+            echo "::error::No shell scripts found under scribe/ — lint scope has drifted"
+            exit 1
+          fi
+          while IFS= read -r script; do
+            echo "→ ${script}"
+            bash -n "${script}"
+            shellcheck --severity=warning "${script}"
+          done <<< "${scripts}"
