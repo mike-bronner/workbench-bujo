@@ -527,7 +527,7 @@ Part A is two operations, not one:
    prompt, no "nothing to surface" narration.
 ```
 
-**Present each surfacing item via `AskUserQuestion` (the structured tool call, per "How to ask" above — never prose while the tool is available; if it's stripped on an unattended run, the plain-text fallback pause applies: write the triage questions as prose and end the turn).** One item per `question`; batch up to 4 items into a single call. Show the item's **full text and original scheduled date in the `preview` field** so the context lives on hover, not in chat:
+**Present each surfacing item via `AskUserQuestion` (the structured tool call, per "How to ask" above — never prose while the tool is available; if it's stripped on an unattended run, the plain-text fallback pause applies: write the triage questions as prose and end the turn — see "If `AskUserQuestion` is stripped").** One item per `question`; batch up to 4 items into a single call. Show the item's **full text and original scheduled date in the `preview` field** so the context lives on hover, not in chat:
 
 ```jsonc
 AskUserQuestion({

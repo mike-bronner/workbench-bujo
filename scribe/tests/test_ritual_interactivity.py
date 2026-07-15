@@ -277,13 +277,15 @@ def test_protocol_fallback_pauses_without_fabricating():
     assert "no fabricated answer" in section
 
 
-# AC #4's enumerated interactive steps: each region is sliced from its own
-# heading to the next step's, so deleting any single per-step fallback callout
-# fails here — a whole-doc match would stay green on the surviving siblings.
+# Every unattended interactive step the doc enumerates (AC #4's four plus the
+# beyond-AC Step 4 A2 triage): each region is sliced from its own heading to
+# the next section's, so deleting any single per-step fallback callout fails
+# here — a whole-doc match would stay green on the surviving siblings.
 UNATTENDED_STEP_REGIONS = {
     "Step 2 check-in": ("## Step 2 —", "## Step 2.5"),
     "Step 2.5 habits": ("## Step 2.5", "## Step 3"),
     "Step 3 disposition": ("## Step 3", "## Step 4"),
+    "Step 4 A2 triage": ("A2. Triage Future Log", "### Part B"),
     "Step 5 planning": ("## Step 5", "## Step 6"),
 }
 
@@ -317,7 +319,7 @@ def test_protocol_hard_rule_matches_stripped_reality():
     # appears in the "Lead with the question" narrative, so a whole-doc match
     # would stay green even if rule 15 itself regressed.
     text = PROTOCOL.read_text()
-    hard_rules = text[text.index("## Hard rules") :].lower()
+    hard_rules = text[text.index("## Hard rules (apply to all tiers") :].lower()
     assert "invoke `askuserquestion` if it's available, otherwise" in hard_rules
 
 
