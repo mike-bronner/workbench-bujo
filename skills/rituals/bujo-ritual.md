@@ -97,7 +97,7 @@ AskUserQuestion({
     header: "Disposition",
     multiSelect: false,
     options: [
-      { label: "Carry forward",  description: "Migrate to today",           preview: "<item context: original text, days open, migration count>" },
+      { label: "Carry forward",  description: "Migrate to today",           preview: "<item context: original text + source note>" },
       { label: "Drop",           description: "Mark dropped — let it go",   preview: "<item context>" },
       { label: "Schedule later", description: "Push to a future date",       preview: "<item context>" },
       { label: "Mark complete",  description: "Already done",                preview: "<item context>" }
@@ -106,7 +106,7 @@ AskUserQuestion({
 })
 ```
 
-Note the `preview` field — show item context (original text, days open, migration count) there so it doesn't clutter chat.
+Note the `preview` field — show item context (the item's original text and the note it came from) there so it doesn't clutter chat.
 
 **2. Open reflection questions** — escape-hatch prefabs + free-text via the auto-Other input. Full call:
 
@@ -395,7 +395,6 @@ An item that matches is **fast-pathed**: give it a *lightweight disposition pass
 1. **Present the item** with its context in plain language. If the orchestrator provided a `suggested_openers[].opener` for this item, use it as your opener — the orchestrator has already noticed what makes this one salient. Otherwise use a tier-appropriate fallback:
    - Open task: "[bullet] — what's the story on this one?"
    - Dropped task: "[bullet] — you dropped this. What drove the drop?"
-   - Migrated 3+ times: "[bullet] — you've migrated this [N] times. What's actually happening around it?"
    - Potential gap: "[observation] — anything to say about this?"
 
    These are open questions (text input, not buttons) — they invite reflection, not a pick-from-list.
@@ -413,14 +412,13 @@ An item that matches is **fast-pathed**: give it a *lightweight disposition pass
 
 Some items get a mandatory probe regardless of how Mike opened. The orchestrator flags these via `recorded_experiences` (salience signals) and the parsed lines themselves carry the others:
 
-- **Migrated 3+ times** (`>` signifier appearing on the same task across 3+ recent dailies): always probe — *except* items carrying a GitHub issue/PR reference (`#\d+` or a `github.com/.*/issues/` / `.*/pull/` URL), which get **no mandatory-probe treatment**; the disposition-only fast-path already handles them (see "GitHub issue/PR fast-path" above). "What's keeping this open across N migrations?" One follow-up, then disposition.
 - **Dropped** (`dropped == True`): always probe — *except* items carrying a GitHub issue/PR reference (`#\d+` or a `github.com/.*/issues/` / `.*/pull/` URL), which get **no mandatory-probe treatment**; the disposition-only fast-path already handles them (see "GitHub issue/PR fast-path" above). "What drove the drop?" Drops carry feeling more often than tasks; surface it.
 - **Insights** (`signifier == "note"` AND `prefix == "inspiration"`, rendered `!—`): always offer to expand. "Want to say more about that, or is the line itself enough?"
 - **Priority items** (`prefix == "priority"`, ✽): always probe what they meant. "How did this priority land — got attention, or got pushed?"
 
 For routine items (no salience signal, no priority prefix, completed cleanly without friction), brisk acknowledgment is fine. The point isn't to grind through every standup mention — it's to hold real depth on the items that asked for it.
 
-5. **Capture the disposition** that emerges. If the reflection already implied a disposition, confirm it conversationally (via a yes/no `AskUserQuestion`). If it's still open, use `AskUserQuestion` with the decisions below. If the tool is stripped (unattended run), pause on the current item's question via the plain-text fallback (see "If `AskUserQuestion` is stripped") — never dispatch a disposition Mike didn't pick. **Set a `preview` field** on each option showing the item's full context — original text, days open, migration count — so Mike sees the full picture on hover without it cluttering the chat.
+5. **Capture the disposition** that emerges. If the reflection already implied a disposition, confirm it conversationally (via a yes/no `AskUserQuestion`). If it's still open, use `AskUserQuestion` with the decisions below. If the tool is stripped (unattended run), pause on the current item's question via the plain-text fallback (see "If `AskUserQuestion` is stripped") — never dispatch a disposition Mike didn't pick. **Set a `preview` field** on each option showing the item's full context — its original text and the note it came from — so Mike sees the full picture on hover without it cluttering the chat.
 
    - **Carry forward** — migrate to current-tier target
    - **Combine into another task** — fold this item under a parent task as a nested sub-item (see "Combine" below)
@@ -461,7 +459,6 @@ For routine items (no salience signal, no priority prefix, completed cleanly wit
 
 - **Every item gets a real look.** No batching through with "carry, drop, schedule, or done?" This is the core departure from a task-review checklist: each item is processed, not dispositioned.
 - **GitHub issue/PR items are fast-pathed — disposition only, never reflected on.** Any item whose text carries a `#\d+` reference or a `github.com/.*/issues/` or `.*/pull/` URL gets a plain Carry-forward / Drop / Complete pass with no feelings probe and no mandatory-probe treatment — GitHub is the system of record for that work, whoever drove it, so reflecting on it here is friction without payoff. The fast-path keys on the explicit reference, not the topic: a referenceless task like `• Research GitHub Actions caching` is a normal item and gets the full review. This rule holds regardless of how the item reached the note (harvested, manually captured, or migrated).
-- **Ryder's migration-fatigue principle:** an item migrated 3+ times without action is a signal. Push harder on those. Use the orchestrator's `migrated_thrice` flag if present.
 - **Never force feelings.** "No feeling here" is a complete answer. Move on.
 - **Never pre-interpret** what a feeling means. Surface it; let Mike name it.
 - **Depth over coverage.** If reviewing every item takes 45 minutes for a monthly, that's fine. Speed-running defeats the purpose.

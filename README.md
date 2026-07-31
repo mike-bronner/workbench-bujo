@@ -161,7 +161,7 @@ Every tier follows the same six steps — the mode matrix above dictates which s
 
 Reflection isn't about completing a task-review checklist. It's about *processing experiences* — noticing what carried weight, surfacing feelings (when they're there), tracing what they point at, and deciding what to do with that.
 
-The orchestrator does **experience identification** before Holmes talks to you: it reads the scoped notes and picks out salient items (insights, completed-after-friction, migrated 3+ times, dropped items, pattern shifts) plus cross-references calendar events for **gaps** — things that happened but weren't captured. It returns these as `reflection_focus` with neutral opener questions ("what opened up for you?" / "anything to say about this?").
+The orchestrator does **experience identification** before Holmes talks to you: it reads the scoped notes and picks out salient items (insights, completed-after-friction, dropped items, pattern shifts) plus cross-references calendar events for **gaps** — things that happened but weren't captured. It returns these as `reflection_focus` with neutral opener questions ("what opened up for you?" / "anything to say about this?").
 
 During the ritual, Holmes uses those openers. If you respond with feelings, he digs. If you respond factually and move on, he accepts that. **"No feeling here" is a complete and respected answer** — feelings aren't forced.
 
