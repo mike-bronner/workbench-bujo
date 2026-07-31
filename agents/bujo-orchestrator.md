@@ -91,13 +91,13 @@ For each ritual in the plan, compute which notes the ritual should retrospect on
 |---|---|
 | daily | `["yesterday"]` |
 | weekly | every daily note in the ISO week ending today (Mon..Sun). Omit any daily notes that don't exist. |
-| monthly | every daily note in the calendar month just ended. Omit any dailies that don't exist. |
+| monthly | `["yesterday"]` — the single most recent daily, same as the daily tier. Daily migration carries every still-open item forward one day at a time, so the latest daily already holds the whole open set; re-scanning the month's dailies would redo work daily already did. |
 | yearly | every monthly note in the calendar year just ended. Omit missing ones. |
 
 **Anomaly-adjusted scopes:**
 
-- If a ritual's *previous* instance is missing (e.g., no weekly at the start of this ISO week), extend the scope back to the last instance that *did* run. Example: weekly didn't run Sun 2026-04-12; next weekly on 2026-04-19 has scope from the last successful weekly (say 2026-04-05) forward.
-- If daily notes are missing inside the scope, omit them (don't fabricate them). The weekly/monthly ritual works with whatever daily notes are present.
+- If a ritual's *previous* instance is missing (e.g., no weekly at the start of this ISO week), extend the scope back to the last instance that *did* run. Example: weekly didn't run Sun 2026-04-12; next weekly on 2026-04-19 has scope from the last successful weekly (say 2026-04-05) forward. **Monthly is exempt** — it stays at `["yesterday"]` however long ago the last monthly ran, because daily migration (not scope width) is what carries the open set forward; a skipped monthly is reported as a `missed_monthly` warning instead of compensated for by widening the scope.
+- If daily notes are missing inside the scope, omit them (don't fabricate them). The weekly ritual works with whatever daily notes are present.
 - Always record the scope's `rationale` as a short string so the ritual skill and the user can see *why* these notes were selected.
 
 **Format:**
@@ -191,7 +191,7 @@ Openers should:
 
 - **Daily:** 0–5 recorded_experiences, 0–3 potential_gaps is typical. More than 8 total is too many for a single ritual.
 - **Weekly:** reflection_focus is **sparse by design** — weekly is a light/disposition-only ritual in our practice. Emit `recorded_experiences: []`, `potential_gaps: []`, and `suggested_openers: []`. The weekly ritual will handle migration + scaffolding, not emotional reflection.
-- **Monthly:** 3–8 recorded_experiences (themes across the month), 0–4 gaps.
+- **Monthly:** same shape as daily — 0–5 recorded_experiences, 0–3 potential_gaps, drawn from the single daily note in scope. Don't attempt a month-wide theme synthesis; you haven't read the month, and themes are Mike's to name during the ritual's check-in, not yours to precompute.
 - **Yearly:** scale up but still prioritize. Better to miss a few than to produce a 20-item list that flattens the ritual.
 
 ### Full reflection_focus shape
@@ -305,8 +305,8 @@ plan:
       scope_notes: ["daily:2026-01-01", "..."]  # existing dailies in this ISO week
       rationale: "ISO week Mon–Sun"
     monthly:
-      scope_notes: ["weekly:2025-12-29", "..."]  # existing weeklies in this calendar month
-      rationale: "calendar month"
+      scope_notes: ["yesterday"]                 # the single most recent daily
+      rationale: "most recent daily — daily migration already carried the open set"
     yearly:
       scope_notes: ["monthly:2025-01", "..."]    # existing monthlies in this calendar year
       rationale: "calendar year"

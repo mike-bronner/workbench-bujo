@@ -173,10 +173,12 @@ reflection_focus:
 |---|---|---|---|---|---|
 | daily | **full** | `today` | `["yesterday"]` | "What went well yesterday? Then — what did it teach you, and is there anything still on your mind to set down before we review?" (wins → lessons → brain dump; the open-task prune lands in angle 3) | "What's the priority for today — the one thing that needs to happen?" |
 | weekly | **light** | `weekly_current` | ISO week's existing dailies | *(skipped — no check-in)* | "What's the shape of this week — what matters most?" |
-| monthly | **full** | `monthly_current` | month's existing dailies | "How did last month land for you? And anything you want to add to the month's record?" | "What's the focus for this month — one or two things?" |
+| monthly | **full** | `monthly_current` | `["yesterday"]` | "How did last month land for you? And anything you want to add to the month's record?" | "What's the focus for this month — one or two things?" |
 | yearly | **full** | `yearly_current` | year's existing monthlies | "How did last year land? And anything you want to surface that wasn't captured?" | "What's the year about — themes, not a todo list?" |
 
 **Mode matters:** `full` tiers run every step of this protocol including the check-in (Step 2) and the reflective review (Step 3 with feelings probing). `light` tier (weekly) runs ONLY the disposition parts — skips Step 2's check-in entirely, runs Step 3 without the feelings layer, runs Step 5 without the energy check. See per-step notes below.
+
+**Why monthly's scope is one daily, not the month's dailies:** the daily ritual migrates every still-open item forward a day at a time, so by the time the month ends the most recent daily already carries the whole open set. Re-scanning 31 dailies to find "what's still open" would redo work daily migration already did correctly. Monthly's *reflection* is still month-wide — it comes from the check-in conversation and last month's monthly note (Step 2, Step 4 Part B), not from re-reading every daily.
 
 **Note on the check-in framings above:** the strings in the table are *opening questions*, not the entirety of Step 2. Step 2 is a multi-turn conversation that walks three angles (what happened / how it landed / what carries forward) and only closes when reflection has landed. See Step 2 for the full protocol — the table cell is the door, not the room.
 

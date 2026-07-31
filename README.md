@@ -150,7 +150,7 @@ Weekly is deliberately lighter — it's a BuJo community extension (not in Ryder
 
 Every tier follows the same six steps — the mode matrix above dictates which steps are full vs. skipped.
 
-1. **Read scope** — orchestrator tells Holmes which notes to fetch (`yesterday`, last week's dailies, last month's dailies, last year's monthlies).
+1. **Read scope** — orchestrator tells Holmes which notes to fetch (daily and monthly: `yesterday`; weekly: last week's dailies; yearly: last year's monthlies). Monthly reads one daily on purpose — daily migration has already carried every still-open item forward, so the latest daily *is* the open set.
 2. **Check-in + capture missing** *(full tiers only)* — "How did [period] go? And anything you want to add?" Both the reflection on how the period landed AND late-arriving captures fold into a single step.
 3. **Item-by-item review** — every unfinished or dropped item from the scope gets inspected individually. **No batching.** Full tiers probe for feelings and meaning; weekly is disposition-only (carry / drop / schedule / complete).
 4. **Scaffold the new period** — create today/this-week/this-month/this-year entry with migrated items, events, Future Log surfaces. For **yearly**, a Future Log rollover step follows — stale entries get walked with you and migrated/dropped.
