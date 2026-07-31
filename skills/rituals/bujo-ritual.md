@@ -213,7 +213,7 @@ This rule applies everywhere in the ritual — never claim an item, count, or st
 
 ### ✂️ Check `truncated` before trusting an absence
 
-`bujo_read` caps the whole packet, so a wide scope (a monthly ritual over 31 dailies) can come back partial. Every note carries a `truncated` field:
+`bujo_read` caps the whole packet, so a wide scope (a yearly ritual over the year's monthlies, a weekly over the ISO week's dailies) can come back partial. Every note carries a `truncated` field:
 
 - **`truncated: null`** — that note is complete. Absence from `lines[]` genuinely means the item isn't there.
 - **`truncated: {omitted: N, …}`** — the tail of that note is missing. **Re-read it in a follow-up `bujo_read` with a smaller `notes` list** before you conclude anything about it, and never tell Mike a note is empty or an item is gone on the strength of a truncated read.
