@@ -209,6 +209,15 @@ When the orchestrator's `recorded_experiences` references an item, verify its `i
 
 This rule applies everywhere in the ritual — never claim an item, count, or status that you can't point to in `lines[]` (or in `bujo_scan` output for Step 3).
 
+### ✂️ Check `truncated` before trusting an absence
+
+`bujo_read` caps the whole packet, so a wide scope (a monthly ritual over 31 dailies) can come back partial. Every note carries a `truncated` field:
+
+- **`truncated: null`** — that note is complete. Absence from `lines[]` genuinely means the item isn't there.
+- **`truncated: {omitted: N, …}`** — the tail of that note is missing. **Re-read it in a follow-up `bujo_read` with a smaller `notes` list** before you conclude anything about it, and never tell Mike a note is empty or an item is gone on the strength of a truncated read.
+
+The rule above ("if it isn't in `lines[]`, it doesn't exist") holds only for notes whose `truncated` is null. Same for `bujo_scan` in Step 3 — its `truncated` means there are more matching items than it showed you; narrow the scope and scan again.
+
 Keep the parsed lines available as you run the rest of the ritual.
 
 ## Step 1.5 — Harvest yesterday (daily tier only)

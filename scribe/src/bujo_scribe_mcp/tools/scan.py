@@ -15,6 +15,11 @@ Status definitions:
                     or malformed divs). Returned as ScanItem with
                     signifier='unrecognized'; the `text`/`anchor` is the
                     de-tagged HTML which round-trips to apply_decisions:remove.
+
+**Bounded output.** At most `BUJO_SCRIBE_MAX_SCAN_ITEMS` items (default 200)
+come back, in scope order. Every match is still counted, so an over-cap
+response carries a `truncated` record with the exact number omitted and how
+to narrow the request. Nothing is dropped silently.
 """
 
 from __future__ import annotations
@@ -28,7 +33,7 @@ from bujo_scribe_mcp.backends.base import BackendError
 from bujo_scribe_mcp.context import Context
 from bujo_scribe_mcp.parsing import BujoLine, UnrecognizedLine, parse_note
 from bujo_scribe_mcp.resolver import resolve
-from bujo_scribe_mcp.schemas import ScanInput, ScanItem, ScanOutput
+from bujo_scribe_mcp.schemas import ScanInput, ScanItem, ScanOutput, Truncation
 
 _INLINE_DATE_RE = re.compile(r"\[(\d{4}-\d{2}-\d{2})\]")
 _TAG_RE = re.compile(r"<[^>]+>")
@@ -36,7 +41,10 @@ _TAG_RE = re.compile(r"<[^>]+>")
 
 def execute(input: ScanInput, *, ctx: Context) -> ScanOutput:
     reference_date = _resolve_date(input.filter.date, ctx.rules.timezone)
-    items: list[ScanItem] = []
+    # Every match is collected, then capped at the end. Scanning is done
+    # against notes already parsed in memory, so counting the overflow costs
+    # nothing and buys the caller an exact `omitted` rather than a floor.
+    matched: list[ScanItem] = []
 
     for identifier in input.scope:
         title = resolve(identifier, rules=ctx.rules)
@@ -52,7 +60,7 @@ def execute(input: ScanInput, *, ctx: Context) -> ScanOutput:
         if input.filter.status == "unrecognized":
             for line in parsed.lines:
                 if isinstance(line, UnrecognizedLine):
-                    items.append(_to_unrecognized_item(ref.title, line))
+                    matched.append(_to_unrecognized_item(ref.title, line))
             continue
 
         for line in parsed.lines:
@@ -60,9 +68,27 @@ def execute(input: ScanInput, *, ctx: Context) -> ScanOutput:
                 continue
             if not _passes_filter(line, input.filter, reference_date=reference_date, rules=ctx.rules):
                 continue
-            items.append(_to_scan_item(ref.title, line))
+            matched.append(_to_scan_item(ref.title, line))
 
-    return ScanOutput(items=items)
+    limit = ctx.config.max_scan_items
+    omitted = max(0, len(matched) - limit)
+    return ScanOutput(
+        items=matched[:limit],
+        truncated=_truncation(omitted, limit) if omitted else None,
+    )
+
+
+def _truncation(omitted: int, limit: int) -> Truncation:
+    return Truncation(
+        omitted=omitted,
+        limit=limit,
+        detail=(
+            f"{omitted} matching item(s) omitted — the response is capped at "
+            f"{limit} items. Items are returned in scope order, so the tail is "
+            f"what is missing. Narrow `scope` to fewer notes, add a `type` "
+            f"filter, pin `filter.date`, or raise BUJO_SCRIBE_MAX_SCAN_ITEMS."
+        ),
+    )
 
 
 # ---------------------------------------------------------------------------

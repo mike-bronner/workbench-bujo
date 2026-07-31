@@ -89,9 +89,13 @@ def make_context(rules, tmp_path):
     Each test gets its own per-test `run_dir` under pytest's tmp_path, so
     mutation locks don't leak across tests and the test suite stays
     parallelizable.
+
+    Extra keyword arguments override `Config` fields — e.g. pass
+    `max_scan_items=5` to exercise the output caps without building a
+    fixture the size of the shipped default.
     """
 
-    def _factory(backend: NotebookBackend) -> Context:
+    def _factory(backend: NotebookBackend, **config_overrides) -> Context:
         config = Config(
             backend="fake",
             folder="📓 Journal",
@@ -100,6 +104,7 @@ def make_context(rules, tmp_path):
             server_name="bujo-scribe-test",
             user_rules_path=None,
             run_dir=tmp_path / "run",
+            **config_overrides,
         )
         return Context(config=config, rules=rules, backend=backend)
 

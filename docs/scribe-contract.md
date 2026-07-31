@@ -85,10 +85,26 @@ packet:
         anchor: "<object><table"
         raw_html: '<div><object><table cellspacing="0" cellpadding="0" …>…</table></object><br></div>'
     retrieved_at: "<ISO timestamp>"
+    truncated:                      # null unless this note's lines were capped
+      omitted: 12                   # exact count of lines not returned
+      limit: 50000
+      detail: "…how to recover the rest…"
 ```
 
 **Behavior:**
 - Always implicitly reads `index` (adds it to packet if not requested).
+- **Bounded output.** The packet as a whole is capped at
+  `BUJO_SCRIBE_MAX_READ_CHARS` estimated wire characters (default 50,000 —
+  roughly one monthly habit-tracker table, or ~9 daily notes). Notes are
+  filled in the order they were requested, lines in document order, so the
+  same call returns the same bytes. A note that lost lines carries a
+  non-null `truncated` with the exact omitted count; `truncated: null` means
+  the note is complete and can be trusted as the whole picture. A line
+  wider than the entire budget is returned anyway — no narrower request
+  could ever retrieve it, and a table must round-trip byte-exact — so a
+  single huge tracker table is never made unreachable. Recover a truncated
+  note by re-requesting it with fewer notes in the call, or raise
+  `BUJO_SCRIBE_MAX_READ_CHARS`.
 - Parallel fetches where the MCP permits.
 - Missing notes return `exists: false, lines: null` — not an error.
 - Four line kinds cross the wire (≥0.10): `kind: "bujo"`, `kind: "heading"`,
@@ -254,11 +270,22 @@ items:
     text: "..."
     anchor: "<stable reference for apply-decisions>"
     due: "YYYY-MM-DD" | null
+truncated:                          # null unless the item list was capped
+  omitted: 37                       # exact count of matches not returned
+  limit: 200
+  detail: "…how to narrow the request…"
 ```
 
 **Behavior:**
 - Read-only.
 - Uses index rules to classify what "open" means.
+- **Bounded output.** At most `BUJO_SCRIBE_MAX_SCAN_ITEMS` items
+  (default 200) are returned, in scope order — deterministic, so the same
+  call returns the same bytes. Every match is still counted, so an over-cap
+  response carries a non-null `truncated` with the *exact* number omitted,
+  not a floor; `truncated: null` means these are all the matches. Narrow
+  `scope`, add a `type` filter, pin `filter.date`, or raise
+  `BUJO_SCRIBE_MAX_SCAN_ITEMS`.
 - `anchor` is a string Holmes can pass back in a subsequent `apply-decisions` as the `bullet` field — stable across re-reads.
 - `status: "unrecognized"` returns every non-BuJo div in scope as a ScanItem
   with `signifier: "unrecognized"`. The `text`/`anchor` is the de-tagged
@@ -403,6 +430,10 @@ This matters because `build-wheel.yml` rebuilds the wheel on every push to `main
 Environment contract:
 
 - `BUJO_SCRIBE_RUN_DIR` — directory for plugin-local runtime state (the mutation lock file). The launcher sets this to `scribe/run/`. When unset (e.g., scribe invoked outside the launcher in tests or ad-hoc), the scribe falls back to `${TMPDIR}/bujo-scribe-run`.
+- `BUJO_SCRIBE_MAX_READ_CHARS` — `scribe.read`'s whole-packet output budget, in estimated wire characters. Default `50000`.
+- `BUJO_SCRIBE_MAX_SCAN_ITEMS` — maximum items `scribe.scan` returns in one response. Default `200`.
+
+Both caps must be positive integers; a malformed or non-positive value is a **startup error**, not a silent fallback to the default — an operator who thinks they raised a cap must never be left believing it while the default is still in force.
 
 Dev escape hatch: set `BUJO_SCRIBE_DEV=1` to bypass the wheel and run from source via `uv run --project`. Use during scribe development to skip the rebuild loop.
 
