@@ -1,4 +1,4 @@
-"""Tests for the version-drift warning in ``hooks/session-warmup.sh``.
+"""Tests for ``hooks/session-warmup.sh`` — version drift, payload, skip guard.
 
 The warmup hook warns at session start when the running plugin bundle
 (``$CLAUDE_PLUGIN_ROOT/.claude-plugin/plugin.json``) is behind the newest
@@ -47,12 +47,17 @@ def _make_cache(home: Path, versions: list[str]) -> None:
         (cache / version).mkdir(parents=True)
 
 
-def _run(home: Path, plugin_root: Path | None) -> str:
+def _run(home: Path, plugin_root: Path | None, agent: str | None = None) -> str:
     # Minimal env: real PATH so coreutils (sed/grep/sort) resolve, controlled
     # HOME so the cache lookup hits our fixture, optional CLAUDE_PLUGIN_ROOT.
+    # The env dict is built from scratch, so CLAUDE_CODE_AGENT is unset unless
+    # a test opts in — an --agent dispatch running this suite cannot leak it in
+    # and silently turn every other test into a skip-guard assertion.
     env = {"HOME": str(home), "PATH": "/usr/bin:/bin:/usr/sbin:/sbin"}
     if plugin_root is not None:
         env["CLAUDE_PLUGIN_ROOT"] = str(plugin_root)
+    if agent is not None:
+        env["CLAUDE_CODE_AGENT"] = agent
     result = subprocess.run(
         ["/bin/bash", str(HOOK)],
         env=env,
@@ -161,6 +166,58 @@ def test_no_stale_proactive_capture_references(tmp_path):
     out = _run(home, bundle)
     for stale in ("Proactive capture", "capture-watch", "Threshold dial"):
         assert stale not in out
+
+
+def test_agent_dispatch_emits_nothing(tmp_path):
+    # CLAUDE_CODE_AGENT is set by Claude Code on every --agent dispatch. Those
+    # sessions carry self-contained prompts; injecting the routing block wastes
+    # tokens and breaks their prompt-cache prefix on every dispatch tick.
+    home = tmp_path / "home"
+    home.mkdir()
+    _make_cache(home, ["0.10.2"])
+    bundle = _make_bundle(tmp_path, "0.10.2")
+    assert _run(home, bundle, agent="workbench-bujo:bujo-orchestrator") == ""
+
+
+def test_agent_dispatch_suppresses_drift_warning(tmp_path):
+    # The guard sits above the drift check, so even a drifted bundle — the one
+    # condition that emits output before the routing block — stays silent.
+    home = tmp_path / "home"
+    home.mkdir()
+    _make_cache(home, ["0.6.0", "0.10.2"])
+    bundle = _make_bundle(tmp_path, "0.6.0")
+    out = _run(home, bundle, agent="workbench-dev-team:watson")
+    assert out == ""
+    assert DRIFT_MARKER not in out
+
+
+def test_agent_dispatch_skip_is_agent_agnostic(tmp_path):
+    # Any agent from any plugin, not a hardcoded roster.
+    home = tmp_path / "home"
+    home.mkdir()
+    bundle = _make_bundle(tmp_path, "0.10.2")
+    for agent in ("workbench-dev-team:holmes", "some-plugin:some-future-agent"):
+        assert _run(home, bundle, agent=agent) == ""
+
+
+def test_interactive_session_still_emits_routing_block(tmp_path):
+    # The other half of the guard: unset CLAUDE_CODE_AGENT must be untouched.
+    home = tmp_path / "home"
+    home.mkdir()
+    _make_cache(home, ["0.10.2"])
+    bundle = _make_bundle(tmp_path, "0.10.2")
+    out = _run(home, bundle)
+    assert "BuJo routing" in out
+    assert "Trigger vocabulary" in out
+
+
+def test_empty_agent_value_treated_as_interactive(tmp_path):
+    # An exported-but-empty var is not a dispatch. `-n` must not skip here, or
+    # a stray `export CLAUDE_CODE_AGENT=` would silently kill Mike's warmup.
+    home = tmp_path / "home"
+    home.mkdir()
+    bundle = _make_bundle(tmp_path, "0.10.2")
+    assert "BuJo routing" in _run(home, bundle, agent="")
 
 
 def test_capture_watch_nudge_fully_removed():

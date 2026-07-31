@@ -16,6 +16,21 @@ set -u
 # Idempotent — if Notes is already running, this is a no-op.
 ( osascript -e 'tell application "Notes" to launch' >/dev/null 2>&1 & ) &
 
+# Skip guard: Claude Code sets this env var on every sub-agent dispatch
+# (bujo-orchestrator — and Watson, Holmes, Lestrade, or any future agent
+# from any plugin). Those runs carry self-contained system prompts and must
+# not inherit interactive-session content: the BuJo routing block below is
+# guidance for free conversation with Mike, dead weight in an agent that
+# already knows exactly which scribe calls it makes. Injected into every
+# dispatch it burns tokens and breaks the agent's prompt-cache prefix.
+# Mike's own interactive sessions and the orchestrator/Dispatch runs that
+# spawn those agents have no --agent, leave this unset, and are unaffected.
+# Placed after the Notes pre-warm on purpose — that is a silent, idempotent
+# side effect worth keeping for agents that do hit the journal.
+if [ -n "${CLAUDE_CODE_AGENT:-}" ]; then
+  exit 0
+fi
+
 # ---------------------------------------------------------------------------
 # Version-drift warning. The desktop app can keep serving a stale plugin
 # bundle while the CLI plugin cache is already current
