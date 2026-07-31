@@ -150,7 +150,7 @@ Weekly is deliberately lighter — it's a BuJo community extension (not in Ryder
 
 Every tier follows the same six steps — the mode matrix above dictates which steps are full vs. skipped.
 
-1. **Read scope** — orchestrator tells Holmes which notes to fetch (`yesterday`, last week's dailies, last month's dailies, last year's monthlies).
+1. **Read scope** — orchestrator tells Holmes which notes to fetch (daily and monthly: `yesterday`; weekly: last week's dailies; yearly: last year's monthlies). Monthly reads one daily on purpose — daily migration has already carried every still-open item forward, so the latest daily *is* the open set.
 2. **Check-in + capture missing** *(full tiers only)* — "How did [period] go? And anything you want to add?" Both the reflection on how the period landed AND late-arriving captures fold into a single step.
 3. **Item-by-item review** — every unfinished or dropped item from the scope gets inspected individually. **No batching.** Full tiers probe for feelings and meaning; weekly is disposition-only (carry / drop / schedule / complete).
 4. **Scaffold the new period** — create today/this-week/this-month/this-year entry with migrated items, events, Future Log surfaces. For **yearly**, a Future Log rollover step follows — stale entries get walked with you and migrated/dropped.
@@ -161,7 +161,7 @@ Every tier follows the same six steps — the mode matrix above dictates which s
 
 Reflection isn't about completing a task-review checklist. It's about *processing experiences* — noticing what carried weight, surfacing feelings (when they're there), tracing what they point at, and deciding what to do with that.
 
-The orchestrator does **experience identification** before Holmes talks to you: it reads the scoped notes and picks out salient items (insights, completed-after-friction, migrated 3+ times, dropped items, pattern shifts) plus cross-references calendar events for **gaps** — things that happened but weren't captured. It returns these as `reflection_focus` with neutral opener questions ("what opened up for you?" / "anything to say about this?").
+The orchestrator does **experience identification** before Holmes talks to you: it reads the scoped notes and picks out salient items (insights, completed-after-friction, dropped items, pattern shifts) plus cross-references calendar events for **gaps** — things that happened but weren't captured. It returns these as `reflection_focus` with neutral opener questions ("what opened up for you?" / "anything to say about this?").
 
 During the ritual, Holmes uses those openers. If you respond with feelings, he digs. If you respond factually and move on, he accepts that. **"No feeling here" is a complete and respected answer** — feelings aren't forced.
 

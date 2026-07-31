@@ -61,7 +61,13 @@ def build_server(context: Context | None = None) -> FastMCP:
         description=(
             "Fetch notes for a ritual's context packet. Read-only. Accepts "
             "canonical slugs (today, yesterday, index, future_log, etc.) or "
-            "explicit note titles. Missing notes return exists=false."
+            "explicit note titles. Missing notes return exists=false. "
+            "Context cost: the packet is capped at BUJO_SCRIBE_MAX_READ_CHARS "
+            "(default 50,000) estimated wire characters across ALL requested "
+            "notes, filled in request order. A note whose lines were cut "
+            "carries a non-null 'truncated' with the exact omitted count — "
+            "re-request that note with fewer notes in the call to see the "
+            "rest. A null 'truncated' means the note is complete."
         ),
     )
     def bujo_read(payload: ReadInput) -> ReadOutput:
@@ -100,7 +106,12 @@ def build_server(context: Context | None = None) -> FastMCP:
         name="bujo_scan",
         description=(
             "Find open or due items across notes. Read-only. Returns items "
-            "with stable anchors that can be passed back to bujo_apply_decisions."
+            "with stable anchors that can be passed back to bujo_apply_decisions. "
+            "Context cost: at most BUJO_SCRIBE_MAX_SCAN_ITEMS (default 200) "
+            "items, in scope order. Over the cap, 'truncated' is non-null and "
+            "reports exactly how many matches were omitted — narrow `scope`, "
+            "add a `type` filter, or pin `filter.date`. A null 'truncated' "
+            "means these are all the matches."
         ),
     )
     def bujo_scan(payload: ScanInput) -> ScanOutput:

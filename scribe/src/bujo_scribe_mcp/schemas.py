@@ -106,6 +106,34 @@ class ScribeError(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# Output caps (shared by the read-side verbs)
+# ---------------------------------------------------------------------------
+
+class Truncation(BaseModel):
+    """Set when a response was capped — the signal that data is missing.
+
+    Present (non-null) ONLY when a limit actually bound. Absent means "that
+    is everything", so a caller can trust a null `truncated` completely and
+    must never treat a capped response as the full picture.
+
+    `omitted` is exact, not a floor: both verbs keep counting past the cap
+    instead of bailing out, so the caller knows precisely how much it did
+    not see.
+    """
+
+    omitted: int = Field(description="Exact number of lines (read) or items (scan) dropped.")
+    limit: int = Field(
+        description="Value of the cap that bound. `detail` names the cap and its units."
+    )
+    detail: str = Field(
+        description=(
+            "Human-readable reason, the environment variable that raises the "
+            "cap, and the narrower request that would have fit."
+        )
+    )
+
+
+# ---------------------------------------------------------------------------
 # Verb: read
 # ---------------------------------------------------------------------------
 
@@ -195,6 +223,16 @@ class NoteContent(BaseModel):
         ),
     )
     retrieved_at: str
+    truncated: Truncation | None = Field(
+        default=None,
+        description=(
+            "Non-null when this note's lines were capped by the packet-wide "
+            "character budget (BUJO_SCRIBE_MAX_READ_CHARS). `lines` then holds "
+            "a prefix of the note in document order — re-request the note in a "
+            "follow-up bujo_read call with fewer notes to see the rest. Null "
+            "means `lines` is the complete note."
+        ),
+    )
 
 
 class ReadOutput(BaseModel):
@@ -446,6 +484,15 @@ class ScanItem(BaseModel):
 
 class ScanOutput(BaseModel):
     items: list[ScanItem]
+    truncated: Truncation | None = Field(
+        default=None,
+        description=(
+            "Non-null when more items matched than BUJO_SCRIBE_MAX_SCAN_ITEMS "
+            "allows. `items` then holds the first N in scope order — narrow "
+            "`scope`, add a `type` filter, or pin `date` to see the rest. Null "
+            "means `items` is every match."
+        ),
+    )
 
 
 # ---------------------------------------------------------------------------
