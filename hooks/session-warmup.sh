@@ -1,13 +1,21 @@
 #!/usr/bin/env bash
 #
-# session-warmup (workbench-bujo): inject BuJo routing guidance at session
-# start so the agent defaults to the scribe MCP whenever Mike mentions
-# tasks / events / notes / bullets in free conversation — not just during
-# an explicit `/bujo` ritual.
+# session-warmup (workbench-bujo): the live half of BuJo's session start —
+# pre-warm Apple Notes, and warn when the running plugin bundle has drifted
+# behind the CLI plugin cache. Both read live machine state, so both have to
+# run per session.
 #
-# Emits a context block on stdout. Claude Code injects that into the
-# assistant's context. Exit code is always 0 — a warmup failure must not
-# break the session.
+# The *static* half — the BuJo routing block (trigger vocabulary, habit-check
+# pointer, rules of the road) — is no longer emitted here. It lives in
+# `session-warmup.md` at the plugin root, which workbench-core's SessionStart
+# hook aggregates with every other workbench-* plugin's contribution into one
+# block baked into ~/.claude/CLAUDE.md. One shared, byte-stable block instead
+# of one live `additionalContext` block per plugin keeps the prompt-cache
+# prefix intact for scheduled tasks. See workbench-core's
+# `docs/session-warmup-contributions.md`.
+#
+# Emits on stdout only when drift is detected; silent otherwise. Exit code is
+# always 0 — a warmup failure must not break the session.
 
 set -u
 
@@ -19,12 +27,12 @@ set -u
 # Skip guard: Claude Code sets this env var on every sub-agent dispatch
 # (bujo-orchestrator — and Watson, Holmes, Lestrade, or any future agent
 # from any plugin). Those runs carry self-contained system prompts and must
-# not inherit interactive-session content: the BuJo routing block below is
-# guidance for free conversation with Mike, dead weight in an agent that
-# already knows exactly which scribe calls it makes. Injected into every
-# dispatch it burns tokens and breaks the agent's prompt-cache prefix.
-# Mike's own interactive sessions and the orchestrator/Dispatch runs that
-# spawn those agents have no --agent, leave this unset, and are unaffected.
+# not inherit interactive-session content: the drift warning below is a
+# heads-up for Mike, not something a dispatched agent can act on. Injected
+# into every dispatch it burns tokens and breaks the agent's prompt-cache
+# prefix. Mike's own interactive sessions and the orchestrator/Dispatch runs
+# that spawn those agents have no --agent, leave this unset, and are
+# unaffected.
 # Placed after the Notes pre-warm on purpose — that is a silent, idempotent
 # side effect worth keeping for agents that do hit the journal.
 if [ -n "${CLAUDE_CODE_AGENT:-}" ]; then
@@ -36,6 +44,10 @@ fi
 # bundle while the CLI plugin cache is already current
 # (anthropics/claude-code#45810) — the scribe MCP then silently runs an old
 # version against the live journal. Surface it loudly at warmup.
+#
+# This is deliberately NOT part of `session-warmup.md`: it flips on every
+# upgrade, and the aggregated block must be byte-identical across runs to stay
+# cacheable. Volatile state stays in the live hook.
 #
 # Best-effort and dependency-free: extract versions with sed (no jq — the
 # hook PATH is narrow under Cowork), compare numerically with BSD `sort`
@@ -89,54 +101,5 @@ DRIFT
 }
 
 _bujo_emit_drift_warning
-
-# Skill-file path for the pointer section below. Guarded expansion — under
-# `set -u` an unset CLAUDE_PLUGIN_ROOT (manual runs, tests) must not kill the
-# warmup; it degrades to repo-relative paths.
-_bujo_root="${CLAUDE_PLUGIN_ROOT:-}"
-_ritual_skill="${_bujo_root:+$_bujo_root/}skills/rituals/bujo-ritual.md"
-
-cat <<'EOF'
-# 📓 BuJo routing
-
-The `workbench-bujo` plugin is active. Mike's bullet journal lives in Apple Notes under the `📓 Journal` folder and is managed via the `scribe` MCP (tools prefixed `mcp__plugin_workbench-bujo_scribe__bujo_*`).
-
-**The journal is the source of truth for tasks, events, notes, and schedules — never invent a task list in local memory.** When Mike mentions any of these in free conversation (outside of an explicit `/bujo` ritual), route through the scribe rather than keeping a side list.
-
-## Trigger vocabulary → scribe action
-
-| Mike says something like… | Default action |
-|---|---|
-| "I need to…", "add a task", "don't forget to…", "todo:" | `bujo_apply_decisions` with `op: "add"` onto `today`, signifier `task` |
-| "I need to X next week / on [future date]" | Add directly to `future_log` with text `[YYYY-MM-DD] X` and signifier `task` (use `add` op with `note: "future_log"`) — don't bounce through today |
-| "meeting at…", "appointment on…", "I have X on [date]" | Signifier `event`. Today/no-date → `add` onto `today`. Future date → add to `future_log` with `[YYYY-MM-DD]` prefix. |
-| "FYI…", "worth noting…", "insight:", "remember that…" | `op: "add"` with signifier `note` onto `today` |
-| "what's on today?", "did I have X?", "is Y on the list?" | `bujo_read(notes: ["today"])` first, answer from fresh state |
-| "I finished X", "done with Y", "shipped Z" | `op: "complete"` on the matching bullet IF an open task matches; else **auto-capture** as `× X` on today (the work happened, record it) |
-| "drop X", "skip X", "not doing X" | `op: "drop"` on the matching bullet |
-| "bring back X", "restore X", "I shouldn't have dropped X" | `op: "undrop"` on the matching bullet |
-| "combine X into Y", "fold X under Y", "nest X under Y" | `op: "combine"` — source gets `>`, target gets a sub-item under the parent. NEVER interpret "combine" as "drop" |
-
-## Habit tracker (≥0.10) — surface what's due today
-
-Mike's monthly note has a habit-tracker table under the Tracker heading. Each column is a habit; column headers carry metadata (`Meditate (10 min) @08:00 [daily]`). Cells filled with `✅` are completions for that day-row.
-EOF
-
-cat <<EOF
-At session start, if \`today\` exists: read **Step 2.5 (Habit check-in)** in \`${_ritual_skill}\` and run that check now — parse the tracker on \`monthly_current\`, surface due-and-unmarked habits via one batched \`AskUserQuestion\` (≤4, yes/no), update cells on yes. No habit table on \`monthly_current\` → skip silently (habit tracking isn't set up).
-EOF
-
-cat <<'EOF'
-## Rules of the road
-
-1. **Always pre-warm the scribe.** If the deferred tool list shows `mcp__plugin_workbench-bujo_scribe__*`, load schemas via `ToolSearch(query="select:mcp__plugin_workbench-bujo_scribe__bujo_read,...")` before first use. The MCP may take ~10s to boot — retry with brief sleeps before concluding it's offline.
-2. **Single items don't need the `/bujo` ritual.** Just dispatch one `add` decision and confirm the diff in one line. The ritual is for periodic reflection (daily/weekly/etc.), not capture.
-
-## Not in scope for routing
-
-- Code-level TODOs and comments in source files — those stay in code.
-- Claude Code session-scoped todos (the `TodoWrite` tool) — those are for tracking the *current turn's work*, not durable tasks.
-
-EOF
 
 exit 0
